@@ -26,6 +26,13 @@ yarn-error.*
 .DS_Store
 *.pem
 
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
 # Local env files
 .env
 .env.local
