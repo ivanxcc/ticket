@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "MyPhoneApp",
-    "slug": "my-phone-app",
+    "name": "Ticket",
+    "slug": "ticket",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "myphoneapp",
+    "scheme": "ticket",
     "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/images/splash-icon.png",
@@ -14,14 +14,14 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.yourcompany.myphoneapp"
+      "bundleIdentifier": "com.ivanxcc.ticket"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.yourcompany.myphoneapp"
+      "package": "com.ivanxcc.ticket"
     },
     "web": {
       "bundler": "metro",
