@@ -6,6 +6,8 @@ import {
   TextInput,
   ScrollView,
   StyleSheet,
+  Alert,
+  Clipboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,7 +28,16 @@ const THEME_OPTIONS: { mode: ThemeMode; label: string; icon: keyof typeof Ionico
 
 export default function SettingsScreen() {
   const { colors } = useTheme();
-  const { members, currentMemberId, setCurrentMember, updateMember, themeMode, setThemeMode, tickets } = useAppStore();
+  const {
+    members,
+    currentMemberId,
+    updateMember,
+    themeMode,
+    setThemeMode,
+    tickets,
+    householdInviteCode,
+    signOut,
+  } = useAppStore();
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
@@ -45,6 +56,20 @@ export default function SettingsScreen() {
     setEditingId(null);
   };
 
+  const handleCopyCode = () => {
+    if (householdInviteCode) {
+      Clipboard.setString(householdInviteCode);
+      Alert.alert('Copied!', `Invite code "${householdInviteCode}" copied to clipboard.`);
+    }
+  };
+
+  const handleSignOut = () => {
+    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Sign Out', style: 'destructive', onPress: () => signOut() },
+    ]);
+  };
+
   const totalTickets = tickets.length;
   const openTickets = tickets.filter((t) => t.status !== 'complete').length;
   const completedTickets = tickets.filter((t) => t.status === 'complete').length;
@@ -56,7 +81,7 @@ export default function SettingsScreen() {
         <Text style={[styles.pageTitle, { color: colors.text }]}>Settings</Text>
 
         {/* Stats */}
-        <View style={[styles.statsRow]}>
+        <View style={styles.statsRow}>
           <View style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.statNum, { color: colors.text }]}>{totalTickets}</Text>
             <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Total</Text>
@@ -73,8 +98,27 @@ export default function SettingsScreen() {
 
         {/* Household section */}
         <SectionHeader title="HOUSEHOLD" colors={colors} />
+
+        {/* Invite code */}
+        {householdInviteCode && (
+          <TouchableOpacity
+            onPress={handleCopyCode}
+            activeOpacity={0.7}
+            style={[styles.inviteCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          >
+            <View>
+              <Text style={[styles.inviteLabel, { color: colors.textSecondary }]}>Invite code</Text>
+              <Text style={[styles.inviteCode, { color: colors.accent }]}>{householdInviteCode}</Text>
+            </View>
+            <View style={[styles.copyBtn, { backgroundColor: `${colors.accent}15`, borderColor: `${colors.accent}30` }]}>
+              <Ionicons name="copy-outline" size={15} color={colors.accent} />
+              <Text style={[styles.copyText, { color: colors.accent }]}>Copy</Text>
+            </View>
+          </TouchableOpacity>
+        )}
+
         <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
-          Select who you are. Tap a member to edit their name and emoji.
+          Share the invite code with your partner. You can edit your own profile below.
         </Text>
 
         {members.map((member) => {
@@ -132,11 +176,7 @@ export default function SettingsScreen() {
               ) : (
                 /* Display mode */
                 <View style={styles.memberDisplay}>
-                  <TouchableOpacity
-                    onPress={() => setCurrentMember(member.id)}
-                    style={styles.memberLeft}
-                    activeOpacity={0.7}
-                  >
+                  <View style={styles.memberLeft}>
                     <Text style={styles.memberEmoji}>{member.emoji}</Text>
                     <View>
                       <Text style={[styles.memberName, { color: colors.text }]}>{member.name}</Text>
@@ -144,13 +184,15 @@ export default function SettingsScreen() {
                         <Text style={[styles.youLabel, { color: member.color }]}>● You</Text>
                       )}
                     </View>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => startEdit(member)}
-                    style={[styles.editBtn, { borderColor: colors.border }]}
-                  >
-                    <Ionicons name="pencil-outline" size={15} color={colors.textSecondary} />
-                  </TouchableOpacity>
+                  </View>
+                  {isCurrentUser && (
+                    <TouchableOpacity
+                      onPress={() => startEdit(member)}
+                      style={[styles.editBtn, { borderColor: colors.border }]}
+                    >
+                      <Ionicons name="pencil-outline" size={15} color={colors.textSecondary} />
+                    </TouchableOpacity>
+                  )}
                 </View>
               )}
             </View>
@@ -199,6 +241,16 @@ export default function SettingsScreen() {
             A simple household ticketing system.
           </Text>
         </View>
+
+        {/* Sign Out */}
+        <TouchableOpacity
+          onPress={handleSignOut}
+          activeOpacity={0.7}
+          style={[styles.signOutBtn, { borderColor: '#EF444440' }]}
+        >
+          <Ionicons name="log-out-outline" size={18} color="#EF4444" />
+          <Text style={styles.signOutText}>Sign Out</Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -255,6 +307,38 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 12,
     fontWeight: '500',
+  },
+  inviteCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 14,
+  },
+  inviteLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.4,
+    marginBottom: 3,
+  },
+  inviteCode: {
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: 2,
+  },
+  copyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  copyText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
   memberCard: {
     borderRadius: 16,
@@ -372,5 +456,20 @@ const styles = StyleSheet.create({
   aboutSub: {
     fontSize: 13,
     textAlign: 'center',
+  },
+  signOutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginTop: 8,
+  },
+  signOutText: {
+    color: '#EF4444',
+    fontSize: 15,
+    fontWeight: '600',
   },
 });
