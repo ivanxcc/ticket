@@ -10,7 +10,7 @@ import {
   Platform,
   Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -29,6 +29,7 @@ const PRESET_EMOJIS = [
 export default function CreateScreen() {
   const { colors } = useTheme();
   const { members, currentMemberId, addTicket } = useAppStore();
+  const insets = useSafeAreaInsets();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -58,11 +59,10 @@ export default function CreateScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
         {/* Header */}
         <View style={[styles.header, { borderBottomColor: colors.border }]}>
@@ -77,6 +77,7 @@ export default function CreateScreen() {
           contentContainerStyle={styles.form}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
         >
           {/* Title */}
           <View style={styles.section}>
@@ -206,7 +207,7 @@ export default function CreateScreen() {
         </ScrollView>
 
         {/* Submit */}
-        <View style={[styles.submitContainer, { borderTopColor: colors.border, backgroundColor: colors.background }]}>
+        <View style={[styles.submitContainer, { borderTopColor: colors.border, backgroundColor: colors.background, paddingBottom: Math.max(insets.bottom, 16) }]}>
           <TouchableOpacity
             onPress={handleSubmit}
             disabled={!canSubmit}
@@ -329,7 +330,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   submitContainer: {
-    padding: 16,
+    paddingTop: 12,
+    paddingHorizontal: 16,
     borderTopWidth: 1,
   },
   submitBtn: {

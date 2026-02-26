@@ -17,8 +17,8 @@ import { TicketCard } from '@/components/TicketCard';
 import { EmptyState } from '@/components/EmptyState';
 import { STATUS_COLORS, STATUS_LABELS } from '@/constants/theme';
 
-const FILTERS: { key: Status | 'all'; label: string }[] = [
-  { key: 'all', label: 'All' },
+const FILTERS: { key: Status | 'open'; label: string }[] = [
+  { key: 'open', label: 'Open' },
   { key: 'submitted', label: 'Submitted' },
   { key: 'in_progress', label: 'In Progress' },
   { key: 'pending', label: 'Pending' },
@@ -31,12 +31,14 @@ export default function TicketsScreen() {
   const members = useAppStore((state) => state.members);
   const currentMemberId = useAppStore((state) => state.currentMemberId);
 
-  const [activeFilter, setActiveFilter] = useState<Status | 'all'>('all');
+  const [activeFilter, setActiveFilter] = useState<Status | 'open'>('open');
   const [mineOnly, setMineOnly] = useState(false);
 
   const filtered = useMemo(() => {
     let list = tickets;
-    if (activeFilter !== 'all') {
+    if (activeFilter === 'open') {
+      list = list.filter((t) => t.status !== 'complete');
+    } else {
       list = list.filter((t) => t.status === activeFilter);
     }
     if (mineOnly) {
@@ -93,7 +95,7 @@ export default function TicketsScreen() {
       >
         {FILTERS.map((f) => {
           const active = activeFilter === f.key;
-          const chipColor = f.key !== 'all' ? STATUS_COLORS[f.key as Status] : colors.accent;
+          const chipColor = f.key !== 'open' ? STATUS_COLORS[f.key as Status] : colors.accent;
           return (
             <TouchableOpacity
               key={f.key}
@@ -107,7 +109,7 @@ export default function TicketsScreen() {
                 },
               ]}
             >
-              {f.key !== 'all' && active && (
+              {f.key !== 'open' && active && (
                 <View style={[styles.chipDot, { backgroundColor: chipColor }]} />
               )}
               <Text style={[styles.chipText, { color: active ? chipColor : colors.textSecondary }]}>
@@ -129,10 +131,10 @@ export default function TicketsScreen() {
         ListEmptyComponent={
           <EmptyState
             icon="ticket-outline"
-            title={activeFilter === 'all' ? 'No tickets yet' : `No ${STATUS_LABELS[activeFilter as Status] ?? ''} tickets`}
+            title={activeFilter === 'open' ? 'All caught up!' : `No ${STATUS_LABELS[activeFilter as Status] ?? ''} tickets`}
             subtitle={
-              activeFilter === 'all'
-                ? 'Tap the + button to submit your first ticket'
+              activeFilter === 'open'
+                ? 'No open tickets — tap + to create one'
                 : 'Nothing here — try a different filter'
             }
           />
