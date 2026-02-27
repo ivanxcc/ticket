@@ -30,6 +30,7 @@ export default function TicketsScreen() {
   const tickets = useAppStore((state) => state.tickets);
   const members = useAppStore((state) => state.members);
   const currentMemberId = useAppStore((state) => state.currentMemberId);
+  const unreadNotifications = useAppStore((state) => state.unreadNotifications);
 
   const [activeFilter, setActiveFilter] = useState<Status | 'open'>('open');
   const [mineOnly, setMineOnly] = useState(false);
@@ -67,23 +68,37 @@ export default function TicketsScreen() {
           )}
         </View>
 
-        {/* Mine toggle */}
-        <TouchableOpacity
-          onPress={() => setMineOnly((v) => !v)}
-          style={[
-            styles.mineToggle,
-            {
-              backgroundColor: mineOnly ? `${colors.accent}20` : colors.surface,
-              borderColor: mineOnly ? `${colors.accent}60` : colors.border,
-            },
-          ]}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.mineEmoji}>{currentMember?.emoji ?? '🏠'}</Text>
-          <Text style={[styles.mineLabel, { color: mineOnly ? colors.accent : colors.textSecondary }]}>
-            Mine
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          <TouchableOpacity
+            onPress={() => router.push('/notifications')}
+            style={[styles.bellBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="notifications-outline" size={18} color={colors.textSecondary} />
+            {unreadNotifications > 0 && (
+              <View style={[styles.bellBadge, { backgroundColor: '#EF4444' }]}>
+                <Text style={styles.bellBadgeText}>{unreadNotifications > 99 ? '99+' : unreadNotifications}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => setMineOnly((v) => !v)}
+            style={[
+              styles.mineToggle,
+              {
+                backgroundColor: mineOnly ? `${colors.accent}20` : colors.surface,
+                borderColor: mineOnly ? `${colors.accent}60` : colors.border,
+              },
+            ]}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.mineEmoji}>{currentMember?.emoji ?? '🏠'}</Text>
+            <Text style={[styles.mineLabel, { color: mineOnly ? colors.accent : colors.textSecondary }]}>
+              Mine
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Filter chips */}
@@ -196,6 +211,35 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 20,
     borderWidth: 1,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  bellBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bellBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  bellBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
   },
   mineEmoji: {
     fontSize: 14,

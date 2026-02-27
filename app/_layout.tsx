@@ -110,6 +110,10 @@ export default function RootLayout() {
             name="ticket/[id]"
             options={{ headerShown: false, animation: 'slide_from_right' }}
           />
+          <Stack.Screen
+            name="notifications"
+            options={{ headerShown: false, animation: 'slide_from_right' }}
+          />
         </Stack>
         <StatusBar style={isDark ? 'light' : 'dark'} />
       </ThemeProvider>

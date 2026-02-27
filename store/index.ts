@@ -1,11 +1,12 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { supabase, type DbTicket } from '@/lib/supabase';
+import { supabase, type DbNotification, type DbTicket } from '@/lib/supabase';
 
 export type Status = 'submitted' | 'in_progress' | 'pending' | 'complete';
 export type Priority = 'low' | 'medium' | 'urgent';
 export type ThemeMode = 'system' | 'light' | 'dark';
+export type NotificationType = 'ticket_assigned' | 'ticket_reassigned' | 'ticket_status_changed';
 
 export interface Member {
   id: string;
@@ -26,6 +27,18 @@ export interface Ticket {
   priority: Priority;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AppNotification {
+  id: string;
+  userId: string;
+  householdId: string | null;
+  ticketId: string | null;
+  type: NotificationType;
+  title: string;
+  body: string;
+  isRead: boolean;
+  createdAt: string;
 }
 
 type PendingOp =
@@ -54,6 +67,20 @@ function dbToTicket(t: DbTicket): Ticket {
     priority: t.priority as Priority,
     createdAt: t.created_at,
     updatedAt: t.updated_at,
+  };
+}
+
+function dbToNotification(n: DbNotification): AppNotification {
+  return {
+    id: n.id,
+    userId: n.user_id,
+    householdId: n.household_id,
+    ticketId: n.ticket_id,
+    type: n.type,
+    title: n.title,
+    body: n.body,
+    isRead: n.is_read,
+    createdAt: n.created_at,
   };
 }
 
@@ -88,6 +115,13 @@ interface AppStore {
   updateTicketStatus: (id: string, status: Status) => void;
   deleteTicket: (id: string) => void;
 
+  // Notifications
+  notifications: AppNotification[];
+  unreadNotifications: number;
+  fetchNotifications: () => Promise<void>;
+  markNotificationRead: (id: string) => void;
+  markAllNotificationsRead: () => void;
+
   // Supabase sync
   pendingOps: PendingOp[];
   initFromSupabase: () => Promise<void>;
@@ -120,6 +154,8 @@ export const useAppStore = create<AppStore>()(
           members: [],
           currentMemberId: '',
           tickets: [],
+          notifications: [],
+          unreadNotifications: 0,
           pendingOps: [],
           nextTicketNumber: 1,
         }),
@@ -129,11 +165,10 @@ export const useAppStore = create<AppStore>()(
       currentMemberId: '',
       setCurrentMember: (id) => set({ currentMemberId: id }),
       updateMember: (id, updates) => {
-        // Optimistic local update
         set((state) => ({
           members: state.members.map((m) => (m.id === id ? { ...m, ...updates } : m)),
         }));
-        // Sync to Supabase (own profile only)
+
         if (id === get().userId) {
           supabase.from('profiles').update(updates).eq('id', id).then(({ error }) => {
             if (error) console.warn('Failed to update profile:', error.message);
@@ -159,13 +194,11 @@ export const useAppStore = create<AppStore>()(
           updatedAt: now,
         };
 
-        // Optimistic insert
         set((state) => ({
           tickets: [ticket, ...state.tickets],
           nextTicketNumber: state.nextTicketNumber + 1,
         }));
 
-        // Sync to Supabase
         supabase
           .from('tickets')
           .insert({
@@ -189,7 +222,7 @@ export const useAppStore = create<AppStore>()(
               }));
               return;
             }
-            // Update local ticket with real ticket_number from DB
+
             if (dbTicket) {
               set((state) => ({
                 tickets: state.tickets.map((t) =>
@@ -201,14 +234,12 @@ export const useAppStore = create<AppStore>()(
       },
 
       updateTicketStatus: (id, status) => {
-        // Optimistic update
         set((state) => ({
           tickets: state.tickets.map((t) =>
             t.id === id ? { ...t, status, updatedAt: new Date().toISOString() } : t,
           ),
         }));
 
-        // Sync to Supabase
         supabase
           .from('tickets')
           .update({ status })
@@ -224,12 +255,10 @@ export const useAppStore = create<AppStore>()(
       },
 
       deleteTicket: (id) => {
-        // Optimistic delete
         set((state) => ({
           tickets: state.tickets.filter((t) => t.id !== id),
         }));
 
-        // Sync to Supabase
         supabase
           .from('tickets')
           .delete()
@@ -241,6 +270,61 @@ export const useAppStore = create<AppStore>()(
                 pendingOps: [...state.pendingOps, { type: 'delete', id }],
               }));
             }
+          });
+      },
+
+      // Notifications
+      notifications: [],
+      unreadNotifications: 0,
+
+      fetchNotifications: async () => {
+        const { userId } = get();
+        if (!userId) return;
+
+        const { data } = await supabase
+          .from('notifications')
+          .select('*')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(100);
+
+        if (data) {
+          const notifications = data.map(dbToNotification);
+          const unreadNotifications = notifications.filter((n) => !n.isRead).length;
+          set({ notifications, unreadNotifications });
+        }
+      },
+
+      markNotificationRead: (id) => {
+        set((state) => {
+          const notifications = state.notifications.map((n) =>
+            n.id === id ? { ...n, isRead: true } : n,
+          );
+          const unreadNotifications = notifications.filter((n) => !n.isRead).length;
+          return { notifications, unreadNotifications };
+        });
+
+        supabase.from('notifications').update({ is_read: true }).eq('id', id).then(({ error }) => {
+          if (error) console.warn('markNotificationRead failed:', error.message);
+        });
+      },
+
+      markAllNotificationsRead: () => {
+        const { userId } = get();
+        if (!userId) return;
+
+        set((state) => ({
+          notifications: state.notifications.map((n) => ({ ...n, isRead: true })),
+          unreadNotifications: 0,
+        }));
+
+        supabase
+          .from('notifications')
+          .update({ is_read: true })
+          .eq('user_id', userId)
+          .eq('is_read', false)
+          .then(({ error }) => {
+            if (error) console.warn('markAllNotificationsRead failed:', error.message);
           });
       },
 
@@ -282,21 +366,19 @@ export const useAppStore = create<AppStore>()(
         set({ pendingOps: remaining });
       },
 
-      // Supabase init: fetch profiles + household + tickets
+      // Supabase init: fetch profiles + household + tickets + notifications
       initFromSupabase: async () => {
         const { userId } = get();
         if (!userId) return;
 
-        // Fetch current user's profile
         const { data: profile } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', userId)
           .single();
 
-        if (!profile?.household_id) return; // Not in a household yet
+        if (!profile?.household_id) return;
 
-        // Fetch household (for invite code)
         const { data: household } = await supabase
           .from('households')
           .select('*')
@@ -307,7 +389,6 @@ export const useAppStore = create<AppStore>()(
           set({ householdId: household.id, householdInviteCode: household.invite_code });
         }
 
-        // Fetch all profiles in household
         const { data: profiles } = await supabase
           .from('profiles')
           .select('*')
@@ -323,7 +404,6 @@ export const useAppStore = create<AppStore>()(
           set({ members, currentMemberId: userId });
         }
 
-        // Fetch all tickets
         const { data: dbTickets } = await supabase
           .from('tickets')
           .select('*')
@@ -336,19 +416,17 @@ export const useAppStore = create<AppStore>()(
           set({ tickets, nextTicketNumber: maxNum + 1 });
         }
 
-        // Flush any pending offline ops
+        await get().fetchNotifications();
         get().flushPendingOps();
-
-        // Start real-time sync
         get().startRealtimeSync();
       },
 
       startRealtimeSync: () => {
-        const { householdId } = get();
-        if (!householdId || realtimeChannel) return;
+        const { householdId, userId } = get();
+        if (!householdId || !userId || realtimeChannel) return;
 
         realtimeChannel = supabase
-          .channel(`household-${householdId}`)
+          .channel(`household-${householdId}-user-${userId}`)
           .on(
             'postgres_changes',
             {
@@ -358,10 +436,8 @@ export const useAppStore = create<AppStore>()(
               filter: `household_id=eq.${householdId}`,
             },
             (payload) => {
-              const { userId } = get();
               if (payload.eventType === 'INSERT') {
                 const newTicket = dbToTicket(payload.new as DbTicket);
-                // Skip if it came from us (already applied optimistically)
                 if (newTicket.createdBy === userId) return;
                 set((state) => {
                   if (state.tickets.find((t) => t.id === newTicket.id)) return state;
@@ -380,6 +456,42 @@ export const useAppStore = create<AppStore>()(
                 set((state) => ({
                   tickets: state.tickets.filter((t) => t.id !== deletedId),
                 }));
+              }
+            },
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'notifications',
+              filter: `user_id=eq.${userId}`,
+            },
+            (payload) => {
+              if (payload.eventType === 'INSERT') {
+                const notification = dbToNotification(payload.new as DbNotification);
+                set((state) => {
+                  if (state.notifications.find((n) => n.id === notification.id)) return state;
+                  const notifications = [notification, ...state.notifications];
+                  const unreadNotifications = notifications.filter((n) => !n.isRead).length;
+                  return { notifications, unreadNotifications };
+                });
+              } else if (payload.eventType === 'UPDATE') {
+                const updated = dbToNotification(payload.new as DbNotification);
+                set((state) => {
+                  const notifications = state.notifications.map((n) =>
+                    n.id === updated.id ? updated : n,
+                  );
+                  const unreadNotifications = notifications.filter((n) => !n.isRead).length;
+                  return { notifications, unreadNotifications };
+                });
+              } else if (payload.eventType === 'DELETE') {
+                const deletedId = (payload.old as { id: string }).id;
+                set((state) => {
+                  const notifications = state.notifications.filter((n) => n.id !== deletedId);
+                  const unreadNotifications = notifications.filter((n) => !n.isRead).length;
+                  return { notifications, unreadNotifications };
+                });
               }
             },
           )
@@ -411,6 +523,8 @@ export const useAppStore = create<AppStore>()(
         currentMemberId: state.currentMemberId,
         tickets: state.tickets,
         nextTicketNumber: state.nextTicketNumber,
+        notifications: state.notifications,
+        unreadNotifications: state.unreadNotifications,
         pendingOps: state.pendingOps,
       }),
       onRehydrateStorage: () => (state) => {

@@ -43,3 +43,15 @@ export type DbTicket = {
   created_at: string;
   updated_at: string;
 };
+
+export type DbNotification = {
+  id: string;
+  user_id: string;
+  household_id: string | null;
+  ticket_id: string | null;
+  type: 'ticket_assigned' | 'ticket_reassigned' | 'ticket_status_changed';
+  title: string;
+  body: string;
+  is_read: boolean;
+  created_at: string;
+};
