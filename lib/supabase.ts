@@ -20,6 +20,7 @@ export type DbProfile = {
   name: string;
   emoji: string;
   color: string;
+  push_token: string | null;
   created_at: string;
 };
 

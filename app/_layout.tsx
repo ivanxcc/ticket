@@ -5,8 +5,19 @@ import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'react-native';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import * as Notifications from 'expo-notifications';
 import { useAppStore } from '@/store';
 import { supabase } from '@/lib/supabase';
+import { registerForPushAsync } from '@/lib/pushNotifications';
+
+// Show push alerts/sounds even when the app is in the foreground
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
 
 type AuthState = 'loading' | 'unauthenticated' | 'no-household' | 'ready';
 
@@ -96,6 +107,31 @@ export default function RootLayout() {
     });
 
     return () => sub.remove();
+  }, [authState]);
+
+  // Register for push notifications and handle tap-to-navigate
+  useEffect(() => {
+    if (authState !== 'ready') return;
+
+    // Register device and save token to profile
+    registerForPushAsync().then(async (token) => {
+      if (!token) return;
+      const { userId } = useAppStore.getState();
+      if (userId) {
+        await supabase.from('profiles').update({ push_token: token }).eq('id', userId);
+      }
+    });
+
+    // Navigate to ticket when user taps a push notification
+    const responseSub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const ticketId = response.notification.request.content.data?.ticketId as string | undefined;
+      if (ticketId) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        router.push(`/ticket/${ticketId}` as any);
+      }
+    });
+
+    return () => responseSub.remove();
   }, [authState]);
 
   const spinnerColor = isDark ? '#F0F0F0' : '#111111';

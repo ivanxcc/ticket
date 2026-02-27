@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase, type DbNotification, type DbTicket } from '@/lib/supabase';
+import { sendPushNotification } from '@/lib/pushNotifications';
 
 export type Status = 'submitted' | 'in_progress' | 'pending' | 'complete';
 export type Priority = 'low' | 'medium' | 'urgent';
@@ -13,6 +14,7 @@ export interface Member {
   name: string;
   emoji: string;
   color: string;
+  pushToken: string | null;
 }
 
 export interface Ticket {
@@ -237,11 +239,45 @@ export const useAppStore = create<AppStore>()(
                   t.id === tempId ? { ...t, ticketNumber: dbTicket.ticket_number } : t,
                 ),
               }));
+
+              // Push notification to partner if ticket is assigned to them
+              const { members, userId: currentUserId } = get();
+              const assignee = members.find(
+                (m) => m.id === dbTicket.assigned_to && m.id !== currentUserId,
+              );
+              if (assignee?.pushToken) {
+                sendPushNotification(
+                  assignee.pushToken,
+                  'New ticket assigned to you',
+                  `#${dbTicket.ticket_number} ${dbTicket.title}`,
+                  { ticketId: dbTicket.id },
+                );
+              }
             }
           });
       },
 
       updateTicketStatus: (id, status) => {
+        // Send push to all involved members (except self) before optimistic update
+        const { tickets, members, userId } = get();
+        const ticket = tickets.find((t) => t.id === id);
+        if (ticket) {
+          const involvedIds = [...new Set([ticket.assignedTo, ticket.createdBy])];
+          for (const memberId of involvedIds) {
+            if (memberId && memberId !== userId) {
+              const member = members.find((m) => m.id === memberId);
+              if (member?.pushToken) {
+                sendPushNotification(
+                  member.pushToken,
+                  'Ticket status updated',
+                  `#${ticket.ticketNumber} ${ticket.title} → ${status.replace(/_/g, ' ')}`,
+                  { ticketId: id },
+                );
+              }
+            }
+          }
+        }
+
         set((state) => ({
           tickets: state.tickets.map((t) =>
             t.id === id ? { ...t, status, updatedAt: new Date().toISOString() } : t,
@@ -408,6 +444,7 @@ export const useAppStore = create<AppStore>()(
             name: p.name,
             emoji: p.emoji,
             color: p.color,
+            pushToken: p.push_token ?? null,
           }));
           set({ members, currentMemberId: userId });
         }
