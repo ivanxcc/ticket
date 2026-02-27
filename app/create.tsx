@@ -35,14 +35,19 @@ export default function CreateScreen() {
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('it');
   const [assignedTo, setAssignedTo] = useState(
-    members.find((m) => m.id !== currentMemberId)?.id ?? members[0].id,
+    members.find((m) => m.id !== currentMemberId)?.id ?? members[0]?.id ?? '',
   );
   const [priority, setPriority] = useState<Priority>('medium');
 
-  const canSubmit = title.trim().length > 0;
+  const canSubmit = title.trim().length > 0 && !!currentMemberId && !!assignedTo;
 
   const handleSubmit = () => {
     if (!canSubmit) return;
+
+    if (!currentMemberId || !assignedTo) {
+      Alert.alert('Missing assignee', 'Please choose who this ticket is assigned to.');
+      return;
+    }
 
     addTicket({
       title: title.trim(),

@@ -170,12 +170,7 @@ export default function SettingsScreen() {
           </View>
           <TouchableOpacity
             activeOpacity={0.75}
-            onPress={() =>
-              router.push({
-                pathname: '/(tabs)/index' as any,
-                params: { filter: 'open' },
-              })
-            }
+            onPress={() => router.push('/?filter=open' as any)}
             style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
           >
             <Text style={[styles.statNum, { color: '#F59E0B' }]}>{openTickets}</Text>
@@ -183,12 +178,7 @@ export default function SettingsScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             activeOpacity={0.75}
-            onPress={() =>
-              router.push({
-                pathname: '/(tabs)/index' as any,
-                params: { filter: 'complete' },
-              })
-            }
+            onPress={() => router.push('/?filter=complete' as any)}
             style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
           >
             <Text style={[styles.statNum, { color: '#22C55E' }]}>{completedTickets}</Text>

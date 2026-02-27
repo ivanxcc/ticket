@@ -46,6 +46,14 @@ type PendingOp =
   | { type: 'update'; id: string; status: Status }
   | { type: 'delete'; id: string };
 
+function normalizeUuid(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(trimmed)
+    ? trimmed
+    : null;
+}
+
 function generateId(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
     const r = (Math.random() * 16) | 0;
@@ -207,8 +215,8 @@ export const useAppStore = create<AppStore>()(
             title: ticket.title,
             description: ticket.description,
             category: ticket.category,
-            assigned_to: ticket.assignedTo || null,
-            created_by: ticket.createdBy || null,
+            assigned_to: normalizeUuid(ticket.assignedTo),
+            created_by: normalizeUuid(ticket.createdBy),
             status: ticket.status,
             priority: ticket.priority,
           })
@@ -345,8 +353,8 @@ export const useAppStore = create<AppStore>()(
               title: op.ticket.title,
               description: op.ticket.description,
               category: op.ticket.category,
-              assigned_to: op.ticket.assignedTo || null,
-              created_by: op.ticket.createdBy || null,
+              assigned_to: normalizeUuid(op.ticket.assignedTo),
+              created_by: normalizeUuid(op.ticket.createdBy),
               status: op.ticket.status,
               priority: op.ticket.priority,
             });
@@ -411,9 +419,16 @@ export const useAppStore = create<AppStore>()(
           .order('created_at', { ascending: false });
 
         if (dbTickets) {
-          const tickets = dbTickets.map(dbToTicket);
-          const maxNum = tickets.reduce((m, t) => Math.max(m, t.ticketNumber), 0);
-          set({ tickets, nextTicketNumber: maxNum + 1 });
+          const serverTickets = dbTickets.map(dbToTicket);
+          const pendingInsertTickets = get()
+            .pendingOps
+            .filter((op): op is Extract<PendingOp, { type: 'insert' }> => op.type === 'insert')
+            .map((op) => op.ticket)
+            .filter((pt) => !serverTickets.some((st) => st.id === pt.id));
+
+          const mergedTickets = [...pendingInsertTickets, ...serverTickets];
+          const maxNum = mergedTickets.reduce((m, t) => Math.max(m, t.ticketNumber), 0);
+          set({ tickets: mergedTickets, nextTicketNumber: maxNum + 1 });
         }
 
         await get().fetchNotifications();
