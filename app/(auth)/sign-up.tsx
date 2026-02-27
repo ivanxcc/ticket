@@ -28,8 +28,9 @@ export default function SignUpScreen() {
       return;
     }
     setLoading(true);
-    const { error } = await supabase.auth.signUp({
-      email: email.trim().toLowerCase(),
+    const normalizedEmail = email.trim().toLowerCase();
+    const { data, error } = await supabase.auth.signUp({
+      email: normalizedEmail,
       password,
     });
     setLoading(false);
@@ -37,8 +38,16 @@ export default function SignUpScreen() {
       Alert.alert('Sign Up Failed', error.message);
       return;
     }
-    // Go to profile + household setup
-    router.replace('/(auth)/setup' as any);
+
+    if (data.session) {
+      router.replace('/(auth)/setup' as any);
+      return;
+    }
+
+    router.replace({
+      pathname: '/(auth)/verify-email' as any,
+      params: { email: normalizedEmail },
+    });
   };
 
   return (

@@ -12,8 +12,10 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/hooks/useTheme';
+import { useAppStore } from '@/store';
 
 const PRESET_EMOJIS = [
   '🏠', '🦁', '🐻', '🦊', '🐺', '🦝', '🐨', '🦄',
@@ -30,20 +32,31 @@ type Step = 'profile' | 'household';
 export default function SetupScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const { initFromSupabase, signOut, setUserId, setHousehold } = useAppStore();
 
   const [step, setStep] = useState<Step>('profile');
   const [name, setName] = useState('');
   const [emoji, setEmoji] = useState('🏠');
+  const [customEmojiInput, setCustomEmojiInput] = useState('');
   const [color, setColor] = useState('#5B8DEF');
   const [joinCode, setJoinCode] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleCreateHousehold = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+  const errMsg = (e: unknown) =>
+    (e as any)?.message ?? (e as any)?.error_description ?? String(e);
 
+  const handleCreateHousehold = async () => {
     setLoading(true);
     try {
+      const { data: { session }, error: authErr } = await supabase.auth.getSession();
+      if (authErr) throw authErr;
+      if (!session?.user) {
+        Alert.alert('Session required', 'Please sign in after verifying your email.');
+        router.replace('/(auth)/sign-in' as any);
+        return;
+      }
+      const user = session.user;
+
       // Generate unique invite code
       const inviteCode = Math.random().toString(36).slice(2, 8).toUpperCase();
 
@@ -67,10 +80,15 @@ export default function SetupScreen() {
         });
       if (pErr) throw pErr;
 
-      // Auth state change in _layout.tsx will handle navigation
+      // Ensure app auth store is primed so init does not early-return.
+      setUserId(user.id);
+      setHousehold(household.id, household.invite_code);
+
+      // Populate store so _layout.tsx householdId watcher can transition to 'ready'
+      await initFromSupabase();
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Something went wrong';
-      Alert.alert('Error', msg);
+      console.error('handleCreateHousehold error:', e);
+      Alert.alert('Error', errMsg(e));
     } finally {
       setLoading(false);
     }
@@ -78,11 +96,17 @@ export default function SetupScreen() {
 
   const handleJoinHousehold = async () => {
     if (!joinCode.trim()) return;
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
     setLoading(true);
     try {
+      const { data: { session }, error: authErr } = await supabase.auth.getSession();
+      if (authErr) throw authErr;
+      if (!session?.user) {
+        Alert.alert('Session required', 'Please sign in after verifying your email.');
+        router.replace('/(auth)/sign-in' as any);
+        return;
+      }
+      const user = session.user;
+
       // Look up household by invite code
       const { data: household, error: hErr } = await supabase
         .from('households')
@@ -91,7 +115,6 @@ export default function SetupScreen() {
         .single();
       if (hErr || !household) {
         Alert.alert('Invalid code', 'No household found with that invite code.');
-        setLoading(false);
         return;
       }
 
@@ -101,19 +124,48 @@ export default function SetupScreen() {
         .upsert({
           id: user.id,
           household_id: household.id,
-          name: name.trim() || 'Partner',
+          name: name.trim() || 'User',
           emoji,
           color,
         });
       if (pErr) throw pErr;
 
-      // Auth state change in _layout.tsx will handle navigation
+      // Ensure app auth store is primed so init does not early-return.
+      setUserId(user.id);
+      setHousehold(household.id, household.invite_code);
+
+      // Populate store so _layout.tsx householdId watcher can transition to 'ready'
+      await initFromSupabase();
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Something went wrong';
-      Alert.alert('Error', msg);
+      console.error('handleJoinHousehold error:', e);
+      Alert.alert('Error', errMsg(e));
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleStartOver = () => {
+    Alert.alert(
+      'Start over?',
+      'This will sign you out and return to sign in.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Start Over',
+          style: 'destructive',
+          onPress: async () => {
+            setLoading(true);
+            try {
+              await signOut();
+            } catch (e: unknown) {
+              Alert.alert('Error', errMsg(e));
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ],
+    );
   };
 
   if (step === 'profile') {
@@ -129,7 +181,7 @@ export default function SetupScreen() {
           >
             <Text style={[styles.title, { color: colors.text }]}>Your profile</Text>
             <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-              How should your partner see you?
+              Set up how your household sees you.
             </Text>
 
             {/* Emoji picker */}
@@ -138,7 +190,7 @@ export default function SetupScreen() {
               {PRESET_EMOJIS.map((e) => (
                 <TouchableOpacity
                   key={e}
-                  onPress={() => setEmoji(e)}
+                  onPress={() => { setEmoji(e); setCustomEmojiInput(''); }}
                   style={[
                     styles.emojiBtn,
                     {
@@ -150,6 +202,24 @@ export default function SetupScreen() {
                   <Text style={styles.emojiText}>{e}</Text>
                 </TouchableOpacity>
               ))}
+              <TextInput
+                value={customEmojiInput}
+                onChangeText={(text) => {
+                  setCustomEmojiInput(text);
+                  if (text) setEmoji(text);
+                }}
+                placeholder="✏️"
+                maxLength={8}
+                style={[
+                  styles.emojiBtn,
+                  styles.customEmojiInput,
+                  {
+                    backgroundColor: customEmojiInput ? `${color}25` : colors.surface,
+                    borderColor: customEmojiInput ? color : colors.border,
+                    color: colors.text,
+                  },
+                ]}
+              />
             </View>
 
             {/* Color picker */}
@@ -186,6 +256,14 @@ export default function SetupScreen() {
             >
               <Text style={styles.btnText}>Continue</Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleStartOver}
+              disabled={loading}
+              activeOpacity={0.7}
+              style={styles.startOverBtn}
+            >
+              <Text style={[styles.startOverText, { color: colors.textSecondary }]}>Start Over</Text>
+            </TouchableOpacity>
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -205,14 +283,14 @@ export default function SetupScreen() {
         >
           <Text style={[styles.title, { color: colors.text }]}>Your household</Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-            Are you setting up a new household or joining your partner's?
+            Start a new household or join an existing one.
           </Text>
 
           {/* Create household */}
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Text style={[styles.cardTitle, { color: colors.text }]}>Create a new household</Text>
             <Text style={[styles.cardDesc, { color: colors.textSecondary }]}>
-              You'll get an invite code to share with your partner.
+              You'll get an invite code to share with household members.
             </Text>
             <TouchableOpacity
               onPress={handleCreateHousehold}
@@ -232,7 +310,7 @@ export default function SetupScreen() {
 
           {/* Join household */}
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.cardTitle, { color: colors.text }]}>Join your partner's household</Text>
+            <Text style={[styles.cardTitle, { color: colors.text }]}>Join an existing household</Text>
             <Text style={[styles.cardDesc, { color: colors.textSecondary }]}>
               Enter the invite code they shared with you.
             </Text>
@@ -261,6 +339,15 @@ export default function SetupScreen() {
               )}
             </TouchableOpacity>
           </View>
+
+          <TouchableOpacity
+            onPress={handleStartOver}
+            disabled={loading}
+            activeOpacity={0.7}
+            style={styles.startOverBtn}
+          >
+            <Text style={[styles.startOverText, { color: colors.textSecondary }]}>Start Over</Text>
+          </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -285,6 +372,10 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  customEmojiInput: {
+    textAlign: 'center',
+    fontSize: 22,
   },
   emojiText: { fontSize: 24 },
   colorRow: { flexDirection: 'row', gap: 10 },
@@ -325,4 +416,14 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 16, fontWeight: '700' },
   cardDesc: { fontSize: 14, lineHeight: 20 },
   or: { textAlign: 'center', fontSize: 13, marginVertical: 4 },
+  startOverBtn: {
+    alignSelf: 'center',
+    marginTop: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  startOverText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
 });

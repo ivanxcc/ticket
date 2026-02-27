@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/useTheme';
 import { useAppStore, type ThemeMode, type Member } from '@/store';
+import { supabase } from '@/lib/supabase';
 
 const PRESET_EMOJIS = [
   '🏠','🦁','🐻','🦊','🐺','🦝','🐨','🦄',
@@ -42,11 +43,15 @@ export default function SettingsScreen() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editEmoji, setEditEmoji] = useState('');
+  const [customEmojiInput, setCustomEmojiInput] = useState('');
+  const [deleteArmedUntil, setDeleteArmedUntil] = useState(0);
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   const startEdit = (member: Member) => {
     setEditingId(member.id);
     setEditName(member.name);
     setEditEmoji(member.emoji);
+    setCustomEmojiInput('');
   };
 
   const saveEdit = () => {
@@ -68,6 +73,82 @@ export default function SettingsScreen() {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Sign Out', style: 'destructive', onPress: () => signOut() },
     ]);
+  };
+
+  const runDeleteAccount = async () => {
+    setDeletingAccount(true);
+    try {
+      const { data: authData, error: authErr } = await supabase.auth.getUser();
+      if (authErr) throw authErr;
+      const user = authData.user;
+      if (!user) throw new Error('Not signed in');
+
+      const { data: profile, error: profileErr } = await supabase
+        .from('profiles')
+        .select('household_id')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (profileErr) throw profileErr;
+
+      const householdId = profile?.household_id ?? null;
+      if (householdId) {
+        const { count: memberCount, error: countErr } = await supabase
+          .from('profiles')
+          .select('id', { count: 'exact', head: true })
+          .eq('household_id', householdId);
+        if (countErr) throw countErr;
+
+        // If this user is the last member, delete household data to avoid orphan data.
+        if ((memberCount ?? 0) <= 1) {
+          const { error: tErr } = await supabase
+            .from('tickets')
+            .delete()
+            .eq('household_id', householdId);
+          if (tErr) throw tErr;
+
+          const { error: hErr } = await supabase
+            .from('households')
+            .delete()
+            .eq('id', householdId);
+          if (hErr) throw hErr;
+        }
+      }
+
+      const { error: deleteProfileErr } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', user.id);
+      if (deleteProfileErr) throw deleteProfileErr;
+
+      await signOut();
+    } catch (e: unknown) {
+      const message = (e as any)?.message ?? String(e);
+      Alert.alert('Delete Failed', message);
+    } finally {
+      setDeletingAccount(false);
+      setDeleteArmedUntil(0);
+    }
+  };
+
+  const handleDeleteAccount = () => {
+    const now = Date.now();
+    if (now > deleteArmedUntil) {
+      setDeleteArmedUntil(now + 10000);
+      Alert.alert(
+        'Arm Delete Account',
+        'Safety check enabled. Tap "Delete Account" again within 10 seconds to continue.',
+      );
+      return;
+    }
+
+    Alert.alert(
+      'Delete account data?',
+      'This removes your profile and may also delete household/tickets if you are the only member. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete Account', style: 'destructive', onPress: runDeleteAccount },
+      ],
+    );
   };
 
   const totalTickets = tickets.length;
@@ -118,7 +199,7 @@ export default function SettingsScreen() {
         )}
 
         <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
-          Share the invite code with your partner. You can edit your own profile below.
+          Share the invite code with household members. You can edit your own profile below.
         </Text>
 
         {members.map((member) => {
@@ -144,15 +225,32 @@ export default function SettingsScreen() {
                     {PRESET_EMOJIS.map((e) => (
                       <TouchableOpacity
                         key={e}
-                        onPress={() => setEditEmoji(e)}
+                        onPress={() => { setEditEmoji(e); setCustomEmojiInput(''); }}
                         style={[
                           styles.emojiOption,
-                          editEmoji === e && { backgroundColor: `${member.color}25`, borderRadius: 8 },
+                          editEmoji === e && !customEmojiInput && { backgroundColor: `${member.color}25`, borderRadius: 8 },
                         ]}
                       >
                         <Text style={styles.emojiText}>{e}</Text>
                       </TouchableOpacity>
                     ))}
+                    <TextInput
+                      value={customEmojiInput}
+                      onChangeText={(text) => {
+                        setCustomEmojiInput(text);
+                        if (text) setEditEmoji(text);
+                      }}
+                      placeholder="✏️"
+                      maxLength={8}
+                      style={[
+                        styles.emojiOption,
+                        styles.customEmojiInput,
+                        customEmojiInput
+                          ? { backgroundColor: `${member.color}25`, borderRadius: 8 }
+                          : undefined,
+                        { color: colors.text },
+                      ]}
+                    />
                   </ScrollView>
                   <View style={styles.editNameRow}>
                     <Text style={styles.selectedEmoji}>{editEmoji}</Text>
@@ -250,6 +348,21 @@ export default function SettingsScreen() {
         >
           <Ionicons name="log-out-outline" size={18} color="#EF4444" />
           <Text style={styles.signOutText}>Sign Out</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={handleDeleteAccount}
+          disabled={deletingAccount}
+          activeOpacity={0.7}
+          style={[
+            styles.deleteAccountBtn,
+            { borderColor: deletingAccount ? '#EF444420' : '#EF444460' },
+          ]}
+        >
+          <Ionicons name="trash-outline" size={18} color="#EF4444" />
+          <Text style={styles.deleteAccountText}>
+            {deletingAccount ? 'Deleting...' : 'Delete Account'}
+          </Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -388,6 +501,11 @@ const styles = StyleSheet.create({
   emojiOption: {
     padding: 4,
   },
+  customEmojiInput: {
+    fontSize: 22,
+    textAlign: 'center',
+    minWidth: 34,
+  },
   emojiText: {
     fontSize: 24,
   },
@@ -471,5 +589,21 @@ const styles = StyleSheet.create({
     color: '#EF4444',
     fontSize: 15,
     fontWeight: '600',
+  },
+  deleteAccountBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  deleteAccountText: {
+    color: '#EF4444',
+    fontSize: 15,
+    fontWeight: '700',
   },
 });
