@@ -10,6 +10,7 @@ import {
   Clipboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/useTheme';
 import { useAppStore, type ThemeMode, type Member } from '@/store';
@@ -167,14 +168,32 @@ export default function SettingsScreen() {
             <Text style={[styles.statNum, { color: colors.text }]}>{totalTickets}</Text>
             <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Total</Text>
           </View>
-          <View style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <TouchableOpacity
+            activeOpacity={0.75}
+            onPress={() =>
+              router.push({
+                pathname: '/(tabs)/index' as any,
+                params: { filter: 'open' },
+              })
+            }
+            style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          >
             <Text style={[styles.statNum, { color: '#F59E0B' }]}>{openTickets}</Text>
             <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Open</Text>
-          </View>
-          <View style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          </TouchableOpacity>
+          <TouchableOpacity
+            activeOpacity={0.75}
+            onPress={() =>
+              router.push({
+                pathname: '/(tabs)/index' as any,
+                params: { filter: 'complete' },
+              })
+            }
+            style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          >
             <Text style={[styles.statNum, { color: '#22C55E' }]}>{completedTickets}</Text>
             <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Done</Text>
-          </View>
+          </TouchableOpacity>
         </View>
 
         {/* Household section */}

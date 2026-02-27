@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/useTheme';
 import { useAppStore, type Status } from '@/store';
@@ -27,6 +27,7 @@ const FILTERS: { key: Status | 'open'; label: string }[] = [
 
 export default function TicketsScreen() {
   const { colors } = useTheme();
+  const { filter } = useLocalSearchParams<{ filter?: string }>();
   const tickets = useAppStore((state) => state.tickets);
   const members = useAppStore((state) => state.members);
   const currentMemberId = useAppStore((state) => state.currentMemberId);
@@ -34,6 +35,13 @@ export default function TicketsScreen() {
 
   const [activeFilter, setActiveFilter] = useState<Status | 'open'>('open');
   const [mineOnly, setMineOnly] = useState(false);
+
+  useEffect(() => {
+    if (!filter) return;
+    if (filter === 'open' || filter === 'submitted' || filter === 'in_progress' || filter === 'pending' || filter === 'complete') {
+      setActiveFilter(filter);
+    }
+  }, [filter]);
 
   const filtered = useMemo(() => {
     let list = tickets;
