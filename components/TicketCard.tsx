@@ -4,24 +4,10 @@ import { Ionicons } from '@expo/vector-icons';
 import ReanimatedSwipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/hooks/useTheme';
-import { useAppStore, type Ticket, type Status } from '@/store';
+import { useAppStore, type Ticket } from '@/store';
 import { STATUS_COLORS, STATUS_LABELS, PRIORITY_COLORS, PRIORITY_LABELS } from '@/constants/theme';
 import { CATEGORIES } from '@/constants/categories';
 import { formatRelativeTime, formatTicketNumber } from '@/utils/format';
-
-const STATUS_FLOW: Record<Status, Status | null> = {
-  submitted: 'in_progress',
-  in_progress: 'pending',
-  pending: 'complete',
-  complete: null,
-};
-
-const ADVANCE_LABELS: Record<Status, string> = {
-  submitted: 'Start',
-  in_progress: 'Pending',
-  pending: 'Complete',
-  complete: '',
-};
 
 interface Props {
   ticket: Ticket;
@@ -30,21 +16,13 @@ interface Props {
 
 export function TicketCard({ ticket, onPress }: Props) {
   const { colors } = useTheme();
-  const { members, updateTicketStatus, deleteTicket } = useAppStore();
+  const { members, deleteTicket } = useAppStore();
   const swipeableRef = useRef<SwipeableMethods>(null);
 
   const assignee = members.find((m) => m.id === ticket.assignedTo);
   const category = CATEGORIES.find((c) => c.id === ticket.category);
   const statusColor = STATUS_COLORS[ticket.status];
   const priorityColor = PRIORITY_COLORS[ticket.priority];
-  const nextStatus = STATUS_FLOW[ticket.status];
-
-  const handleAdvance = () => {
-    if (!nextStatus) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    updateTicketStatus(ticket.id, nextStatus);
-    setTimeout(() => swipeableRef.current?.close(), 50);
-  };
 
   const handleDelete = () => {
     swipeableRef.current?.close();
@@ -67,17 +45,6 @@ export function TicketCard({ ticket, onPress }: Props) {
     }, 250);
   };
 
-  const renderLeftActions = () => {
-    if (!nextStatus) return null;
-    const nextColor = STATUS_COLORS[nextStatus];
-    return (
-      <View style={[styles.leftAction, { backgroundColor: nextColor }]}>
-        <Ionicons name="arrow-forward-circle-outline" size={22} color="#fff" />
-        <Text style={styles.actionText}>{ADVANCE_LABELS[ticket.status]}</Text>
-      </View>
-    );
-  };
-
   const renderRightActions = () => (
     <Pressable style={styles.rightAction} onPress={handleDelete}>
       <Ionicons name="trash-outline" size={22} color="#fff" />
@@ -88,12 +55,7 @@ export function TicketCard({ ticket, onPress }: Props) {
   return (
     <ReanimatedSwipeable
       ref={swipeableRef}
-      renderLeftActions={nextStatus ? renderLeftActions : undefined}
       renderRightActions={renderRightActions}
-      onSwipeableOpen={(direction) => {
-        if (direction === 'left') handleAdvance();
-      }}
-      leftThreshold={80}
       rightThreshold={60}
       friction={1.8}
       containerStyle={styles.swipeContainer}
@@ -162,7 +124,16 @@ export function TicketCard({ ticket, onPress }: Props) {
             <View style={{ flex: 1 }} />
 
             {/* Assignee + time */}
-            <Text style={styles.assigneeEmoji}>{assignee?.emoji ?? '?'}</Text>
+            {assignee ? (
+              <View style={styles.assigneeRow}>
+                <Text style={styles.assigneeEmoji}>{assignee.emoji}</Text>
+                <Text style={[styles.assigneeName, { color: colors.textSecondary }]} numberOfLines={1}>
+                  {assignee.name}
+                </Text>
+              </View>
+            ) : (
+              <Text style={styles.assigneeEmoji}>?</Text>
+            )}
             <Text style={[styles.time, { color: colors.textTertiary }]}>
               {formatRelativeTime(ticket.createdAt)}
             </Text>
@@ -253,18 +224,21 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '600',
   },
+  assigneeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
   assigneeEmoji: {
     fontSize: 13,
   },
+  assigneeName: {
+    fontSize: 11,
+    fontWeight: '500',
+    maxWidth: 64,
+  },
   time: {
     fontSize: 11,
-  },
-  leftAction: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: 90,
-    borderRadius: 14,
-    gap: 4,
   },
   rightAction: {
     justifyContent: 'center',

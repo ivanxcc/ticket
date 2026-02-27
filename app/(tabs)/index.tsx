@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   Platform,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -32,9 +33,17 @@ export default function TicketsScreen() {
   const members = useAppStore((state) => state.members);
   const currentMemberId = useAppStore((state) => state.currentMemberId);
   const unreadNotifications = useAppStore((state) => state.unreadNotifications);
+  const initFromSupabase = useAppStore((state) => state.initFromSupabase);
 
   const [activeFilter, setActiveFilter] = useState<Status | 'open'>('open');
   const [mineOnly, setMineOnly] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await initFromSupabase();
+    setRefreshing(false);
+  }, [initFromSupabase]);
 
   useEffect(() => {
     if (!filter) return;
@@ -163,6 +172,13 @@ export default function TicketsScreen() {
           />
         }
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.accent}
+          />
+        }
       />
 
       {/* FAB */}

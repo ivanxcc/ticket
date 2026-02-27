@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { View, ActivityIndicator, AppState, type AppStateStatus } from 'react-native';
 import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'react-native';
@@ -78,6 +78,25 @@ export default function RootLayout() {
       setAuthState('ready');
     }
   }, [householdId, authState]);
+
+  // Re-sync when app returns to foreground (fixes stale realtime connections)
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  useEffect(() => {
+    if (authState !== 'ready') return;
+
+    const sub = AppState.addEventListener('change', (nextState: AppStateStatus) => {
+      if (appStateRef.current.match(/inactive|background/) && nextState === 'active') {
+        const store = useAppStore.getState();
+        if (store.userId) {
+          store.stopRealtimeSync();
+          store.initFromSupabase();
+        }
+      }
+      appStateRef.current = nextState;
+    });
+
+    return () => sub.remove();
+  }, [authState]);
 
   const spinnerColor = isDark ? '#F0F0F0' : '#111111';
 
