@@ -34,7 +34,7 @@
     "plugins": [
       "expo-router",
       "expo-asset",
-      "expo-notifications"
+      ["expo-notifications", { "mode": "development" }]
     ],
     "experiments": {
       "typedRoutes": true

@@ -4,7 +4,13 @@ import Constants from 'expo-constants';
 
 /**
  * Requests push permission and returns an Expo push token.
- * Returns null if permission is denied or the device can't register.
+ * Returns null if permission is denied or EAS project ID is not configured.
+ *
+ * Prerequisites:
+ *  1. Run `npx eas-cli@latest login` then `npx eas-cli@latest init`
+ *  2. Add the project ID to app.json under expo.extra.eas.projectId
+ *  3. Upload APNs key via `npx eas-cli@latest credentials`
+ *  4. Run `pod install` in ios/ and rebuild in Xcode
  */
 export async function registerForPushAsync(): Promise<string | null> {
   try {
@@ -25,30 +31,37 @@ export async function registerForPushAsync(): Promise<string | null> {
     }
 
     if (finalStatus !== 'granted') {
-      console.warn('[Push] Permission denied');
+      console.warn('[Push] Permission denied by user');
       return null;
     }
 
-    // EAS project ID — required for custom builds. If not set up yet, registration
-    // will fail gracefully. Run `eas init` and add the projectId to app.json under
-    // expo.extra.eas.projectId to enable push on production/custom builds.
     const projectId =
       Constants.easConfig?.projectId ??
-      (Constants.expoConfig?.extra as { eas?: { projectId?: string } } | undefined)?.eas
-        ?.projectId;
+      (Constants.expoConfig?.extra as { eas?: { projectId?: string } } | undefined)?.eas?.projectId;
 
-    const tokenData = await Notifications.getExpoPushTokenAsync(
-      projectId ? { projectId } : undefined,
-    );
+    if (!projectId) {
+      console.error(
+        '[Push] No EAS project ID found.\n' +
+        '  1. Run: npx eas-cli@latest login\n' +
+        '  2. Run: npx eas-cli@latest init\n' +
+        '  3. Add to app.json under expo.extra.eas.projectId\n' +
+        '  4. Upload APNs key: npx eas-cli@latest credentials\n' +
+        '  5. Rebuild the app in Xcode'
+      );
+      return null;
+    }
+
+    const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
+    console.log('[Push] Token registered successfully:', tokenData.data);
     return tokenData.data;
   } catch (err) {
-    console.warn('[Push] Registration failed:', err);
+    console.error('[Push] Registration failed:', err);
     return null;
   }
 }
 
 /**
- * Sends a push notification to an Expo push token via Expo's push gateway.
+ * Sends a push notification via Expo's push gateway.
  * Fire-and-forget — errors are logged but not thrown.
  */
 export async function sendPushNotification(
@@ -58,7 +71,7 @@ export async function sendPushNotification(
   data?: Record<string, string>,
 ): Promise<void> {
   try {
-    await fetch('https://exp.host/--/api/v2/push/send', {
+    const response = await fetch('https://exp.host/--/api/v2/push/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -69,7 +82,15 @@ export async function sendPushNotification(
         sound: 'default',
       }),
     });
+
+    const result = await response.json() as {
+      data?: { status?: string; message?: string; details?: unknown };
+    };
+
+    if (result.data?.status === 'error') {
+      console.error('[Push] Expo gateway error:', result.data.message, result.data.details);
+    }
   } catch (err) {
-    console.warn('[Push] Send failed:', err);
+    console.error('[Push] Send failed:', err);
   }
 }
