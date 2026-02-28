@@ -1,106 +1,114 @@
 # Developer Handoff (Ticket App)
 
-Last updated: February 27, 2026
+Last updated: February 28, 2026
 
 ## Project Snapshot
 - App: React Native + Expo SDK 54 household ticket app
 - Backend: Supabase Auth + Postgres + RLS + Realtime
 - Current branch: `main`
 - Recent work focus:
-  - Onboarding/auth stability
-  - Household RLS fixes
-  - In-app notifications (assignment + status changes)
-  - Settings shortcuts to filtered ticket list
-  - Ticket sync robustness with offline queue
+  - Fixed real-time updates (AppState foreground reconnect + pull-to-refresh)
+  - Swipe UX cleanup (removed swipe-to-advance, kept swipe-to-delete)
+  - Assignee name + emoji displayed on ticket cards
+  - Push notification infrastructure (entitlements, UIBackgroundModes, Supabase Edge Function)
 
 ## Latest Commits (newest first)
-- `a6b9f3e` Fix ticket sync UUID errors and settings stat routing
-- `8ded782` Add settings stat shortcuts to ticket filters
-- `077c386` Add realtime ticket notifications with Supabase triggers and UI
-- `9383613` Fix onboarding auth/session flow and household RLS setup
+- `70db982` Switch push to Supabase Edge Function + direct APNs (no EAS required)
+- `9ab0603` Fix push notifications: entitlements, UIBackgroundModes, and diagnostics
+- `ea5a60a` Add background push notifications via expo-notifications
+- `37784ed` Fix real-time updates, swipe UX, and assignee display
+- `7dbc628` Add developer handoff document for next session
+- `09499b5` Fix ticket sync UUID errors and settings stat routing
 
 ## Important SQL Migrations
-Run these in Supabase SQL Editor if not already applied.
+Run these in Supabase SQL Editor if not already applied (in order).
 
 1. `supabase/rls/2026-02-27_households_insert_policy_fix.sql`
 2. `supabase/rls/2026-02-27_households_policy_reset.sql`
 3. `supabase/rls/2026-02-27_households_select_onboarding_fix.sql`
 4. `supabase/rls/2026-02-27_notifications_system.sql`
 5. `supabase/rls/2026-02-27_notifications_uuid_safety_fix.sql`
+6. `supabase/rls/2026-02-27_add_push_token.sql` — adds `push_token text` column to `profiles`
 
-Notes:
-- The UUID safety fix is important to prevent:
-  - `invalid input syntax for type uuid: ""`
+## Key Functional Areas
 
-## Key Functional Changes
+### Auth and onboarding
+- Signup branches: immediate session → setup, no session (email confirm) → verify-email screen
+- Setup flow checks active session before create/join household
+- Root layout gates app: unauthenticated → sign-in, no household → setup, ready → tabs
 
-### 1) Auth and onboarding
-- Signup now branches based on session presence:
-  - Immediate session -> setup flow
-  - No session (email confirmation required) -> verify-email screen
-- Added `app/(auth)/verify-email.tsx`
-- Setup flow checks active session before create/join household actions
-- Added "Start Over" button on setup screen (sign out and reset flow)
-- Root layout now redirects `ready` auth state to `/(tabs)`
+### Household RLS
+- Policies allow onboarding create/join paths
+- UUID safety: normalizes UUID fields before all inserts to prevent `invalid input syntax for type uuid`
 
-### 2) Household RLS fixes
-- Added/updated policies to allow onboarding household create/join paths
-- Fixed select-policy issue that blocked onboarding when profile row did not yet exist
+### In-app notifications
+- `public.notifications` table + RLS + Postgres trigger on `tickets`
+- Trigger fires on: `ticket_assigned`, `ticket_reassigned`, `ticket_status_changed`
+- Notifications screen: `app/notifications.tsx` — bell icon + unread badge in header
+- Store fetches, persists, and subscribes to notifications via Realtime
 
-### 3) Notifications system
-- Added `public.notifications` table + indexes + RLS policies
-- Added trigger function on `tickets` for:
-  - `ticket_assigned`
-  - `ticket_reassigned`
-  - `ticket_status_changed`
-- Added in-app notifications screen: `app/notifications.tsx`
-- Added bell + unread badge in tickets header
-- Store now fetches, persists, and realtime-subscribes to notifications
+### Real-time sync
+- Supabase channel per household, filters INSERT/UPDATE/DELETE
+- AppState listener: when app returns to foreground, tears down and reinitialises the Realtime channel
+- Pull-to-refresh on ticket list calls `initFromSupabase` directly
 
-### 4) Ticket sync robustness
-- Normalizes UUID fields before ticket insert/flush to avoid invalid UUID writes
-- Create screen now blocks submit when assignee/current user is missing
-- `initFromSupabase` merges server tickets with pending local insert ops so queued tickets do not disappear after reload
+### Ticket card UX
+- Swipe left → delete (with confirmation via alert)
+- Swipe right → removed (was "advance status", conflicted with delete)
+- Footer shows assignee emoji + name side by side
 
-### 5) Settings shortcuts
-- Settings `Open` and `Done` counters now deep-link to ticket list filters:
-  - `/?filter=open`
-  - `/?filter=complete`
+### Push notifications (infrastructure ready, requires paid Apple Developer account)
+- Architecture: `getDevicePushTokenAsync()` → raw APNs hex token stored in `profiles.push_token`
+- Delivery: app calls Supabase Edge Function `send-push`, which signs an APNs JWT (ES256) and POSTs directly to `api.sandbox.push.apple.com`
+- Edge Function: `supabase/functions/send-push/index.ts` — handles JWT signing, DER→P1363 conversion, auth verification
+- iOS entitlements: `aps-environment = development` added to `Ticket.entitlements`
+- `UIBackgroundModes = [remote-notification]` added to `Info.plist`
+- `expo-notifications` plugin with `mode: development` in `app.json`
 
-## Known Issues / Caveats
-- Local type-check in this environment reports missing `@expo/vector-icons` types/module.
-  - This is pre-existing in this environment and not introduced by recent changes.
-- Full Auth user deletion is not implemented client-side (only app data/profile cleanup in current flow).
+**To activate push notifications:**
+1. Pay for Apple Developer Program ($99/year) and get APNs p8 key
+2. Set Supabase secrets: `APNS_KEY`, `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_BUNDLE_ID`, `APNS_SANDBOX`
+3. Deploy Edge Function: `npx supabase functions deploy send-push --project-ref <ref>`
+4. Rebuild app in Xcode (pod install already done)
+5. Change `APNS_SANDBOX=false` when building for production
+
+## iOS Build Notes
+- `ios/` folder exists (generated via `expo prebuild`)
+- Bundle ID: `com.ivanxcc.ticket`
+- Xcode workspace: `ios/Ticket.xcworkspace`
+- Free Apple ID limitation: provisioning expires ~every 7 days, requires rebuild
+- For standalone (no Metro): build with `Release` configuration in Xcode
+- `expo-notifications` uses autolinking via `use_expo_modules!` — runs automatically on `pod install`
+
+## EAS / Expo
+- EAS project ID: `eea0e5ee-f026-41cb-b676-b1b6b5105082` (in `app.json` extra.eas.projectId)
+- `eas.json` exists with `development` and `production` build profiles
+- EAS Build is not currently used — app is built locally via Xcode
+
+## Environment Variables (.env)
+```
+EXPO_PUBLIC_SUPABASE_URL=...
+EXPO_PUBLIC_SUPABASE_ANON_KEY=...
+```
 
 ## Files Most Relevant Next Session
-- `store/index.ts`
-- `app/_layout.tsx`
-- `app/(auth)/sign-up.tsx`
-- `app/(auth)/setup.tsx`
-- `app/(auth)/verify-email.tsx`
-- `app/(tabs)/index.tsx`
-- `app/(tabs)/settings.tsx`
-- `app/notifications.tsx`
-- `supabase/rls/*.sql`
+- `store/index.ts` — all state, Supabase sync, push trigger logic
+- `app/_layout.tsx` — auth gate, AppState reconnect, push registration
+- `lib/pushNotifications.ts` — token registration + Edge Function call
+- `supabase/functions/send-push/index.ts` — APNs Edge Function
+- `app/(tabs)/index.tsx` — ticket list, filters, pull-to-refresh
+- `components/TicketCard.tsx` — swipe UX, assignee display
+- `app/notifications.tsx` — in-app notification screen
+- `supabase/rls/*.sql` — all DB schema/policy migrations
 
-## Quick Validation Checklist
-1. Sign up with email confirmation required:
-   - Confirm app routes to verify-email screen (not setup directly).
-2. After verification + sign-in:
-   - Complete setup and reach tabs.
-3. Create ticket assigned to self/other:
-   - No UUID console error.
-   - Ticket remains after reload.
-4. Open settings and tap:
-   - `Open` -> tickets screen filtered to open.
-   - `Done` -> tickets screen filtered to complete.
-5. Notifications:
-   - Assignment/status changes create notification rows.
-   - Bell badge updates in realtime.
-   - Notifications screen can mark read/all read.
+## Known Issues / Caveats
+- Push notifications non-functional until paid Apple Developer account + secrets configured
+- Full auth user deletion not implemented (only app data/profile cleanup)
+- Local type-check may report missing `@expo/vector-icons` types — pre-existing, not introduced by recent changes
 
 ## Suggested Next Improvements
-- Add server-side/admin path to truly delete `auth.users` accounts.
-- Add push notifications (Expo Notifications) for background delivery.
-- Add migration tracking strategy (Supabase CLI or explicit migration ledger in repo).
-- Add tests around store sync edge cases (pending queue + reload).
+- Add migration tracking strategy (Supabase CLI or explicit ledger in repo)
+- Add tests around store sync edge cases (pending queue + reload)
+- Add server-side path to truly delete `auth.users` accounts
+- Ticket editing (currently tickets cannot be edited after creation)
+- Due dates / reminders
