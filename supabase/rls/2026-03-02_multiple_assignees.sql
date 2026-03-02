@@ -1,7 +1,14 @@
 -- Phase 2: Convert assigned_to from single uuid to uuid[]
 -- Run in Supabase SQL Editor BEFORE deploying the updated app.
 
--- 1. Change the column type: wrap existing single-uuid values in an array
+-- 1. Drop the trigger (depends on assigned_to column type)
+DROP TRIGGER IF EXISTS trg_ticket_notifications ON public.tickets;
+
+-- 2. Drop the foreign key constraint (uuid[] columns cannot have FK constraints)
+ALTER TABLE public.tickets
+  DROP CONSTRAINT IF EXISTS tickets_assigned_to_fkey;
+
+-- 3. Change the column type: wrap existing single-uuid values in an array
 ALTER TABLE public.tickets
   ALTER COLUMN assigned_to TYPE uuid[]
   USING CASE
@@ -9,13 +16,13 @@ ALTER TABLE public.tickets
     ELSE ARRAY[assigned_to]
   END;
 
--- 2. Replace the notifications trigger to handle uuid[] for assigned_to
+-- 4. Recreate the notifications trigger function to handle uuid[]
 CREATE OR REPLACE FUNCTION public.create_ticket_notifications()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
-AS $$
+AS $func$
 BEGIN
   IF TG_OP = 'INSERT' THEN
     -- Notify each new assignee (except the creator)
@@ -33,7 +40,7 @@ BEGIN
   END IF;
 
   IF TG_OP = 'UPDATE' THEN
-    -- Notify newly added assignees (those in new but not in old)
+    -- Notify newly added assignees (in new but not in old)
     IF old.assigned_to IS DISTINCT FROM new.assigned_to AND new.assigned_to IS NOT NULL THEN
       INSERT INTO public.notifications (user_id, household_id, ticket_id, type, title, body)
       SELECT assignee_id,
@@ -47,7 +54,7 @@ BEGIN
         AND NOT (assignee_id = ANY(COALESCE(old.assigned_to, ARRAY[]::uuid[])));
     END IF;
 
-    -- Notify all current assignees + creator of a status change
+    -- Notify all current assignees + creator on status change
     IF old.status IS DISTINCT FROM new.status THEN
       INSERT INTO public.notifications (user_id, household_id, ticket_id, type, title, body)
       SELECT DISTINCT recipient_id,
@@ -67,10 +74,9 @@ BEGIN
 
   RETURN NEW;
 END;
-$$;
+$func$;
 
--- Recreate trigger (unchanged, but re-run to pick up function changes)
-DROP TRIGGER IF EXISTS trg_ticket_notifications ON public.tickets;
+-- 5. Recreate the trigger
 CREATE TRIGGER trg_ticket_notifications
 AFTER INSERT OR UPDATE OF status, assigned_to
 ON public.tickets
