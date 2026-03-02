@@ -19,10 +19,14 @@ export function TicketCard({ ticket, onPress }: Props) {
   const { members, deleteTicket } = useAppStore();
   const swipeableRef = useRef<SwipeableMethods>(null);
 
-  const assignee = members.find((m) => m.id === ticket.assignedTo);
+  const assignees = members.filter((m) => ticket.assignedTo.includes(m.id));
   const category = CATEGORIES.find((c) => c.id === ticket.category);
   const statusColor = STATUS_COLORS[ticket.status];
   const priorityColor = PRIORITY_COLORS[ticket.priority];
+  const isOverdue =
+    ticket.deadline != null &&
+    ticket.status !== 'complete' &&
+    new Date(ticket.deadline) < new Date();
 
   const handleDelete = () => {
     swipeableRef.current?.close();
@@ -123,13 +127,22 @@ export function TicketCard({ ticket, onPress }: Props) {
 
             <View style={{ flex: 1 }} />
 
-            {/* Assignee + time */}
-            {assignee ? (
+            {/* Assignees + overdue badge */}
+            {isOverdue && (
+              <View style={styles.overdueBadge}>
+                <Text style={styles.overdueText}>Overdue</Text>
+              </View>
+            )}
+            {assignees.length > 0 ? (
               <View style={styles.assigneeRow}>
-                <Text style={styles.assigneeEmoji}>{assignee.emoji}</Text>
-                <Text style={[styles.assigneeName, { color: colors.textSecondary }]} numberOfLines={1}>
-                  {assignee.name}
-                </Text>
+                {assignees.slice(0, 2).map((a) => (
+                  <Text key={a.id} style={styles.assigneeEmoji}>{a.emoji}</Text>
+                ))}
+                {assignees.length > 2 && (
+                  <Text style={[styles.assigneeExtra, { color: colors.textTertiary }]}>
+                    +{assignees.length - 2}
+                  </Text>
+                )}
               </View>
             ) : (
               <Text style={styles.assigneeEmoji}>?</Text>
@@ -227,15 +240,26 @@ const styles = StyleSheet.create({
   assigneeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 2,
   },
   assigneeEmoji: {
     fontSize: 13,
   },
-  assigneeName: {
-    fontSize: 11,
-    fontWeight: '500',
-    maxWidth: 64,
+  assigneeExtra: {
+    fontSize: 10,
+    fontWeight: '600',
+    marginLeft: 2,
+  },
+  overdueBadge: {
+    backgroundColor: '#EF444420',
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  overdueText: {
+    color: '#EF4444',
+    fontSize: 10,
+    fontWeight: '700',
   },
   time: {
     fontSize: 11,

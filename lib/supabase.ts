@@ -37,12 +37,21 @@ export type DbTicket = {
   title: string;
   description: string;
   category: string;
-  assigned_to: string | null;
+  assigned_to: string[] | null;
   created_by: string | null;
   status: string;
   priority: string;
+  deadline: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type DbTicketHistory = {
+  id: string;
+  ticket_id: string;
+  status: string;
+  changed_by: string | null;
+  changed_at: string;
 };
 
 export type DbNotification = {

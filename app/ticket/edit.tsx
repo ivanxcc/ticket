@@ -13,10 +13,12 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTheme } from '@/hooks/useTheme';
 import { useAppStore, type Priority } from '@/store';
 import { CATEGORIES } from '@/constants/categories';
 import { PRIORITY_COLORS, PRIORITY_LABELS } from '@/constants/theme';
+import { formatDate } from '@/utils/format';
 
 const PRIORITIES: Priority[] = ['low', 'medium', 'urgent'];
 
@@ -31,8 +33,12 @@ export default function EditTicketScreen() {
   const [title, setTitle] = useState(ticket?.title ?? '');
   const [description, setDescription] = useState(ticket?.description ?? '');
   const [category, setCategory] = useState(ticket?.category ?? 'it');
-  const [assignedTo, setAssignedTo] = useState(ticket?.assignedTo ?? '');
+  const [assignedTo, setAssignedTo] = useState<string[]>(ticket?.assignedTo ?? []);
   const [priority, setPriority] = useState<Priority>(ticket?.priority ?? 'medium');
+  const [deadline, setDeadline] = useState<Date | null>(
+    ticket?.deadline ? new Date(ticket.deadline) : null,
+  );
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   if (!ticket) {
     return (
@@ -47,7 +53,13 @@ export default function EditTicketScreen() {
     );
   }
 
-  const canSave = title.trim().length > 0;
+  const toggleAssignee = (memberId: string) => {
+    setAssignedTo((prev) =>
+      prev.includes(memberId) ? prev.filter((mid) => mid !== memberId) : [...prev, memberId],
+    );
+  };
+
+  const canSave = title.trim().length > 0 && assignedTo.length > 0;
 
   const handleSave = () => {
     if (!canSave) return;
@@ -57,6 +69,7 @@ export default function EditTicketScreen() {
       category,
       priority,
       assignedTo,
+      deadline: deadline ? deadline.toISOString() : null,
     });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     router.back();
@@ -143,16 +156,16 @@ export default function EditTicketScreen() {
             </ScrollView>
           </View>
 
-          {/* Assign to */}
+          {/* Assign to (multi-select) */}
           <View style={styles.section}>
             <Text style={[styles.label, { color: colors.textSecondary }]}>ASSIGN TO</Text>
             <View style={styles.memberRow}>
               {members.map((member) => {
-                const active = assignedTo === member.id;
+                const active = assignedTo.includes(member.id);
                 return (
                   <TouchableOpacity
                     key={member.id}
-                    onPress={() => setAssignedTo(member.id)}
+                    onPress={() => toggleAssignee(member.id)}
                     activeOpacity={0.7}
                     style={[
                       styles.memberCard,
@@ -204,6 +217,57 @@ export default function EditTicketScreen() {
                 );
               })}
             </View>
+          </View>
+
+          {/* Deadline */}
+          <View style={styles.section}>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>DEADLINE</Text>
+            <TouchableOpacity
+              onPress={() => setShowDatePicker(!showDatePicker)}
+              activeOpacity={0.7}
+              style={[
+                styles.deadlineRow,
+                {
+                  backgroundColor: colors.inputBackground,
+                  borderColor: deadline ? colors.accent : colors.border,
+                },
+              ]}
+            >
+              <Ionicons
+                name="calendar-outline"
+                size={16}
+                color={deadline ? colors.accent : colors.textSecondary}
+              />
+              <Text style={[styles.deadlineText, { color: deadline ? colors.text : colors.textTertiary, flex: 1 }]}>
+                {deadline ? formatDate(deadline.toISOString()) : 'No deadline (optional)'}
+              </Text>
+              {deadline ? (
+                <TouchableOpacity
+                  onPress={() => { setDeadline(null); setShowDatePicker(false); }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
+                </TouchableOpacity>
+              ) : (
+                <Ionicons
+                  name={showDatePicker ? 'chevron-up' : 'chevron-down'}
+                  size={16}
+                  color={colors.textTertiary}
+                />
+              )}
+            </TouchableOpacity>
+            {showDatePicker && (
+              <DateTimePicker
+                value={deadline ?? new Date()}
+                mode="date"
+                display="spinner"
+                minimumDate={new Date()}
+                onChange={(_event, selectedDate) => {
+                  if (selectedDate) setDeadline(selectedDate);
+                }}
+                style={styles.datePicker}
+              />
+            )}
           </View>
         </ScrollView>
 
@@ -304,6 +368,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   priorityBtnText: { fontSize: 14, fontWeight: '600' },
+  deadlineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+  },
+  deadlineText: {
+    fontSize: 15,
+  },
+  datePicker: {
+    height: 160,
+  },
   submitContainer: {
     paddingTop: 12,
     paddingHorizontal: 16,

@@ -41,7 +41,8 @@
         {
           "mode": "development"
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true

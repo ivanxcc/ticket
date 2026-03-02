@@ -1,19 +1,21 @@
 # Developer Handoff (Ticket App)
 
-Last updated: March 2, 2026
+Last updated: March 2, 2026 (Phase 2 complete)
 
 ## Project Snapshot
 - App: React Native + Expo SDK 54 household ticket app
 - Backend: Supabase Auth + Postgres + RLS + Realtime
 - Current branch: `main`
-- Current version: `1.1.0` (see `constants/version.ts`)
-- Recent work focus (Phase 1):
-  - Edit tickets after creation (title, description, category, priority, assignee)
-  - Confetti burst animation when a ticket is marked complete (react-native-reanimated)
-  - App version + changelog modal with first-run detection via AsyncStorage
-  - Filter bar display fix (vertical clipping)
+- Current version: `1.2.0` (see `constants/version.ts`)
+- Recent work focus (Phase 2):
+  - Multiple assignees per ticket (`assigned_to uuid[]` in DB)
+  - Ticket deadlines with overdue badge on card + detail
+  - Status history timeline on ticket detail screen
+  - Feedback submission (modal in Settings → `feedback` table in Supabase)
+  - `@react-native-community/datetimepicker` installed + pod install done
 
 ## Latest Commits (newest first)
+- *(Phase 2 — not yet committed)*
 - `ff49d2e` Add Phase 1 features: edit tickets, confetti, changelog, filter fix
 - `0edcdcd` Commit iOS project updates and EAS config
 - `ad6fb73` Update README for current state
@@ -30,6 +32,13 @@ Run these in Supabase SQL Editor if not already applied (in order).
 4. `supabase/rls/2026-02-27_notifications_system.sql`
 5. `supabase/rls/2026-02-27_notifications_uuid_safety_fix.sql`
 6. `supabase/rls/2026-02-27_add_push_token.sql` — adds `push_token text` column to `profiles`
+
+**Phase 2 migrations (run BEFORE deploying v1.2.0):**
+
+7. `supabase/rls/2026-03-02_multiple_assignees.sql` — changes `tickets.assigned_to` to `uuid[]` + updates notifications trigger
+8. `supabase/rls/2026-03-02_ticket_deadline.sql` — adds `tickets.deadline timestamptz`
+9. `supabase/rls/2026-03-02_ticket_history.sql` — creates `ticket_history` table with RLS
+10. `supabase/rls/2026-03-02_feedback.sql` — creates `feedback` table with RLS
 
 ## Key Functional Areas
 
@@ -56,7 +65,8 @@ Run these in Supabase SQL Editor if not already applied (in order).
 ### Ticket card UX
 - Swipe left → delete (with confirmation via alert)
 - Swipe right → removed (was "advance status", conflicted with delete)
-- Footer shows assignee emoji + name side by side
+- Footer shows up to 2 assignee emoji + "+N" badge for overflow
+- Overdue badge (red) shown when `deadline < now && status !== 'complete'`
 
 ### Edit tickets
 - Pencil icon in ticket detail header opens `app/ticket/edit.tsx` as a slide-up modal
@@ -132,25 +142,30 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=...
 - Full auth user deletion not implemented (only app data/profile cleanup)
 - Local type-check may report missing `@expo/vector-icons` types — pre-existing
 
-## Phase 2 — Next Session (requires DB migrations + native rebuild)
-These features need SQL migrations; implement in a dedicated session:
+## Phase 2 — DONE
 
-### 5. Multiple assignees
-**SQL:** `ALTER TABLE tickets ALTER COLUMN assigned_to TYPE uuid[] USING ...`
-**Store:** `assignedTo: string[]`, filter uses `.includes()`, push sends to all
-**UI:** multi-select in create/edit; TicketCard shows up to 2 emoji + "+N"
+### Multiple assignees (v1.2.0)
+- `tickets.assigned_to` is now `uuid[]`
+- `Ticket.assignedTo: string[]` in store; `normalizeUuidArray()` validates on write
+- Backward-compat migration in `onRehydrateStorage` converts old single-string to array
+- Create/Edit screens: tap to toggle each member; at least one required to submit
+- `TicketCard`: shows up to 2 emoji + "+N" badge; red Overdue badge when past deadline
+- `ticket/[id].tsx`: lists all assignees in metadata row
 
-### 6. Ticket deadline
-**SQL:** `ALTER TABLE tickets ADD COLUMN deadline timestamptz`
-**New dep:** `@react-native-community/datetimepicker` (needs pod install + Xcode rebuild)
-**UI:** date picker row in create/edit; overdue badge on TicketCard; deadline in detail metadata
+### Ticket deadline (v1.2.0)
+- `tickets.deadline timestamptz` column
+- `Ticket.deadline: string | null` in store
+- Create/Edit: spinner DateTimePicker (native, via `@react-native-community/datetimepicker`)
+- pod install done — **Xcode rebuild required**
+- TicketCard: red Overdue badge when `deadline < now && status !== complete`
+- Ticket detail: Deadline metadata row with red overdue pill
 
-### 7. Ticket timeline / history
-**SQL:** `CREATE TABLE ticket_history (id, ticket_id, status, changed_by, changed_at)`
-**Store:** `updateTicketStatus` also inserts into `ticket_history`
-**UI:** timeline section in ticket detail showing status events with timestamps
+### Ticket history (v1.2.0)
+- `ticket_history` table with RLS
+- `updateTicketStatus` inserts a row on each status change (after successful Supabase update)
+- `ticket/[id].tsx`: fetches history on mount, renders a vertical timeline
 
-### 8. Feedback submission
-**SQL:** `CREATE TABLE feedback (id, user_id, household_id, message, rating, created_at)`
-**Store:** `submitFeedback(message, rating)` → Supabase insert
-**UI:** "Send Feedback" button in Settings → modal with text input + optional 1-5 star rating
+### Feedback (v1.2.0)
+- `feedback` table with RLS (insert-only for users)
+- `submitFeedback(message, rating)` store action
+- Settings About section: "Send Feedback" button → slide-up Modal with textarea + 1-5 star rating

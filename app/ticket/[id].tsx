@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -6,11 +6,19 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/hooks/useTheme';
 import { useAppStore, type Status } from '@/store';
+import { supabase } from '@/lib/supabase';
 import { Confetti } from '@/components/Confetti';
 import { StatusBadge } from '@/components/StatusBadge';
 import { CATEGORIES } from '@/constants/categories';
 import { STATUS_COLORS, STATUS_LABELS, STATUS_ICONS, PRIORITY_COLORS, PRIORITY_LABELS } from '@/constants/theme';
 import { formatTicketNumber, formatDate, formatRelativeTime } from '@/utils/format';
+
+interface HistoryEntry {
+  id: string;
+  status: Status;
+  changedBy: string | null;
+  changedAt: string;
+}
 
 const STATUS_ORDER: Status[] = ['submitted', 'in_progress', 'pending', 'complete'];
 
@@ -21,6 +29,28 @@ export default function TicketDetailScreen() {
 
   const ticket = tickets.find((t) => t.id === id);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+
+  useEffect(() => {
+    if (!ticket) return;
+    supabase
+      .from('ticket_history')
+      .select('*')
+      .eq('ticket_id', ticket.id)
+      .order('changed_at', { ascending: false })
+      .then(({ data }) => {
+        if (data) {
+          setHistory(
+            data.map((h) => ({
+              id: h.id,
+              status: h.status as Status,
+              changedBy: h.changed_by ?? null,
+              changedAt: h.changed_at,
+            })),
+          );
+        }
+      });
+  }, [ticket?.id]);
 
   if (!ticket) {
     return (
@@ -35,11 +65,15 @@ export default function TicketDetailScreen() {
     );
   }
 
-  const assignee = members.find((m) => m.id === ticket.assignedTo);
+  const assignees = members.filter((m) => ticket.assignedTo.includes(m.id));
   const creator = members.find((m) => m.id === ticket.createdBy);
   const category = CATEGORIES.find((c) => c.id === ticket.category);
   const statusColor = STATUS_COLORS[ticket.status];
   const priorityColor = PRIORITY_COLORS[ticket.priority];
+  const isOverdue =
+    ticket.deadline != null &&
+    ticket.status !== 'complete' &&
+    new Date(ticket.deadline) < new Date();
 
   const handleStatusChange = (newStatus: Status) => {
     if (newStatus === ticket.status) return;
@@ -190,10 +224,18 @@ export default function TicketDetailScreen() {
             label="Assigned to"
             colors={colors}
             value={
-              <View style={styles.metaValueRow}>
-                <Text>{assignee?.emoji ?? '?'}</Text>
-                <Text style={[styles.metaValue, { color: colors.text }]}>{assignee?.name ?? 'Unknown'}</Text>
-              </View>
+              assignees.length > 0 ? (
+                <View style={styles.assigneesRow}>
+                  {assignees.map((a) => (
+                    <View key={a.id} style={styles.assigneeChip}>
+                      <Text style={styles.assigneeChipEmoji}>{a.emoji}</Text>
+                      <Text style={[styles.metaValue, { color: colors.text }]}>{a.name}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <Text style={[styles.metaValue, { color: colors.textTertiary }]}>Unassigned</Text>
+              )
             }
           />
           <MetaDivider colors={colors} />
@@ -215,7 +257,59 @@ export default function TicketDetailScreen() {
             colors={colors}
             value={<Text style={[styles.metaValue, { color: colors.text }]}>{formatDate(ticket.createdAt)}</Text>}
           />
+          {ticket.deadline && (
+            <>
+              <MetaDivider colors={colors} />
+              <MetaRow
+                label="Deadline"
+                colors={colors}
+                value={
+                  <View style={styles.metaValueRow}>
+                    <Text style={[styles.metaValue, { color: isOverdue ? '#EF4444' : colors.text }]}>
+                      {formatDate(ticket.deadline)}
+                    </Text>
+                    {isOverdue && (
+                      <View style={styles.overduePill}>
+                        <Text style={styles.overduePillText}>Overdue</Text>
+                      </View>
+                    )}
+                  </View>
+                }
+              />
+            </>
+          )}
         </View>
+        {/* Timeline */}
+        {history.length > 0 && (
+          <View style={[styles.timelineCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>HISTORY</Text>
+            {history.map((entry, index) => {
+              const sc = STATUS_COLORS[entry.status];
+              const icon = STATUS_ICONS[entry.status] as keyof typeof Ionicons.glyphMap;
+              const actor = members.find((m) => m.id === entry.changedBy);
+              return (
+                <View key={entry.id} style={styles.timelineRow}>
+                  <View style={styles.timelineLeft}>
+                    <View style={[styles.timelineDot, { backgroundColor: sc }]}>
+                      <Ionicons name={icon} size={10} color="#fff" />
+                    </View>
+                    {index < history.length - 1 && (
+                      <View style={[styles.timelineLine, { backgroundColor: colors.border }]} />
+                    )}
+                  </View>
+                  <View style={styles.timelineContent}>
+                    <Text style={[styles.timelineStatus, { color: sc }]}>
+                      {STATUS_LABELS[entry.status]}
+                    </Text>
+                    <Text style={[styles.timelineMeta, { color: colors.textTertiary }]}>
+                      {actor ? `${actor.emoji} ${actor.name}` : 'Unknown'} · {formatRelativeTime(entry.changedAt)}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -394,4 +488,69 @@ const styles = StyleSheet.create({
   },
   notFoundText: { fontSize: 16 },
   backLink: { fontSize: 15, fontWeight: '600' },
+  assigneesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'flex-end',
+  },
+  assigneeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  assigneeChipEmoji: {
+    fontSize: 14,
+  },
+  overduePill: {
+    backgroundColor: '#EF444420',
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginLeft: 6,
+  },
+  overduePillText: {
+    color: '#EF4444',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  timelineCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 16,
+    gap: 0,
+  },
+  timelineRow: {
+    flexDirection: 'row',
+    marginTop: 12,
+  },
+  timelineLeft: {
+    alignItems: 'center',
+    width: 24,
+    marginRight: 12,
+  },
+  timelineDot: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timelineLine: {
+    flex: 1,
+    width: 1.5,
+    marginTop: 4,
+  },
+  timelineContent: {
+    flex: 1,
+    paddingBottom: 12,
+    gap: 2,
+  },
+  timelineStatus: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  timelineMeta: {
+    fontSize: 12,
+  },
 });

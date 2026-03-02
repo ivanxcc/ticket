@@ -23,10 +23,11 @@ export interface Ticket {
   title: string;
   description: string;
   category: string;
-  assignedTo: string;
+  assignedTo: string[];
   createdBy: string;
   status: Status;
   priority: Priority;
+  deadline: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -56,6 +57,10 @@ function normalizeUuid(value: string | null | undefined): string | null {
     : null;
 }
 
+function normalizeUuidArray(values: string[]): string[] {
+  return values.map(normalizeUuid).filter((v): v is string => v !== null);
+}
+
 function generateId(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
     const r = (Math.random() * 16) | 0;
@@ -71,10 +76,11 @@ function dbToTicket(t: DbTicket): Ticket {
     title: t.title,
     description: t.description,
     category: t.category,
-    assignedTo: t.assigned_to ?? '',
+    assignedTo: Array.isArray(t.assigned_to) ? t.assigned_to : (t.assigned_to ? [t.assigned_to as unknown as string] : []),
     createdBy: t.created_by ?? '',
     status: t.status as Status,
     priority: t.priority as Priority,
+    deadline: t.deadline ?? null,
     createdAt: t.created_at,
     updatedAt: t.updated_at,
   };
@@ -122,9 +128,10 @@ interface AppStore {
   tickets: Ticket[];
   nextTicketNumber: number;
   addTicket: (data: Omit<Ticket, 'id' | 'ticketNumber' | 'createdAt' | 'updatedAt'>) => void;
-  editTicket: (id: string, updates: Partial<Pick<Ticket, 'title' | 'description' | 'category' | 'priority' | 'assignedTo'>>) => void;
+  editTicket: (id: string, updates: Partial<Pick<Ticket, 'title' | 'description' | 'category' | 'priority' | 'assignedTo' | 'deadline'>>) => void;
   updateTicketStatus: (id: string, status: Status) => void;
   deleteTicket: (id: string) => void;
+  submitFeedback: (message: string, rating: number | null) => Promise<void>;
 
   // Notifications
   notifications: AppNotification[];
@@ -218,10 +225,11 @@ export const useAppStore = create<AppStore>()(
             title: ticket.title,
             description: ticket.description,
             category: ticket.category,
-            assigned_to: normalizeUuid(ticket.assignedTo),
+            assigned_to: normalizeUuidArray(ticket.assignedTo),
             created_by: normalizeUuid(ticket.createdBy),
             status: ticket.status,
             priority: ticket.priority,
+            deadline: ticket.deadline ?? null,
           })
           .select()
           .single()
@@ -241,18 +249,20 @@ export const useAppStore = create<AppStore>()(
                 ),
               }));
 
-              // Push notification to partner if ticket is assigned to them
+              // Push notification to all non-self assignees
               const { members, userId: currentUserId } = get();
-              const assignee = members.find(
-                (m) => m.id === dbTicket.assigned_to && m.id !== currentUserId,
+              const assignees = members.filter(
+                (m) => dbTicket.assigned_to?.includes(m.id) && m.id !== currentUserId,
               );
-              if (assignee?.pushToken) {
-                sendPushNotification(
-                  assignee.pushToken,
-                  'New ticket assigned to you',
-                  `#${dbTicket.ticket_number} ${dbTicket.title}`,
-                  { ticketId: dbTicket.id },
-                );
+              for (const assignee of assignees) {
+                if (assignee.pushToken) {
+                  sendPushNotification(
+                    assignee.pushToken,
+                    'New ticket assigned to you',
+                    `#${dbTicket.ticket_number} ${dbTicket.title}`,
+                    { ticketId: dbTicket.id },
+                  );
+                }
               }
             }
           });
@@ -271,7 +281,8 @@ export const useAppStore = create<AppStore>()(
         if (updates.description !== undefined) dbUpdates.description = updates.description;
         if (updates.category !== undefined) dbUpdates.category = updates.category;
         if (updates.priority !== undefined) dbUpdates.priority = updates.priority;
-        if (updates.assignedTo !== undefined) dbUpdates.assigned_to = normalizeUuid(updates.assignedTo);
+        if (updates.assignedTo !== undefined) dbUpdates.assigned_to = normalizeUuidArray(updates.assignedTo);
+        if (updates.deadline !== undefined) dbUpdates.deadline = updates.deadline ?? null;
 
         supabase
           .from('tickets')
@@ -287,7 +298,7 @@ export const useAppStore = create<AppStore>()(
         const { tickets, members, userId } = get();
         const ticket = tickets.find((t) => t.id === id);
         if (ticket) {
-          const involvedIds = [...new Set([ticket.assignedTo, ticket.createdBy])];
+          const involvedIds = [...new Set([...ticket.assignedTo, ticket.createdBy])];
           for (const memberId of involvedIds) {
             if (memberId && memberId !== userId) {
               const member = members.find((m) => m.id === memberId);
@@ -319,6 +330,16 @@ export const useAppStore = create<AppStore>()(
               set((state) => ({
                 pendingOps: [...state.pendingOps, { type: 'update', id, status }],
               }));
+            } else {
+              // Record history entry
+              const { userId: changedBy } = get();
+              supabase.from('ticket_history').insert({
+                ticket_id: id,
+                status,
+                changed_by: changedBy,
+              }).then(({ error: hErr }) => {
+                if (hErr) console.warn('ticket_history insert failed:', hErr.message);
+              });
             }
           });
       },
@@ -414,10 +435,11 @@ export const useAppStore = create<AppStore>()(
               title: op.ticket.title,
               description: op.ticket.description,
               category: op.ticket.category,
-              assigned_to: normalizeUuid(op.ticket.assignedTo),
+              assigned_to: normalizeUuidArray(op.ticket.assignedTo),
               created_by: normalizeUuid(op.ticket.createdBy),
               status: op.ticket.status,
               priority: op.ticket.priority,
+              deadline: op.ticket.deadline ?? null,
             });
             if (error) failed = true;
           } else if (op.type === 'update') {
@@ -587,6 +609,17 @@ export const useAppStore = create<AppStore>()(
         await supabase.auth.signOut();
         get().clearAuth();
       },
+
+      submitFeedback: async (message, rating) => {
+        const { userId, householdId } = get();
+        const { error } = await supabase.from('feedback').insert({
+          user_id: userId,
+          household_id: householdId,
+          message,
+          rating: rating ?? null,
+        });
+        if (error) throw new Error(error.message);
+      },
     }),
     {
       name: 'ticket-app-v2',
@@ -605,7 +638,17 @@ export const useAppStore = create<AppStore>()(
         pendingOps: state.pendingOps,
       }),
       onRehydrateStorage: () => (state) => {
-        state?._setHydrated();
+        if (state) {
+          // Migrate assignedTo from string (v1) to string[] (v2)
+          state.tickets = state.tickets.map((t) => ({
+            ...t,
+            assignedTo: Array.isArray(t.assignedTo)
+              ? t.assignedTo
+              : (t.assignedTo ? [t.assignedTo as unknown as string] : []),
+            deadline: (t as any).deadline ?? null,
+          }));
+          state._setHydrated();
+        }
       },
     },
   ),

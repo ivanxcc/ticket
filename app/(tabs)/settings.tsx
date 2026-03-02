@@ -7,6 +7,9 @@ import {
   ScrollView,
   StyleSheet,
   Alert,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
   Clipboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -40,6 +43,7 @@ export default function SettingsScreen() {
     tickets,
     householdInviteCode,
     signOut,
+    submitFeedback,
   } = useAppStore();
 
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -48,6 +52,12 @@ export default function SettingsScreen() {
   const [customEmojiInput, setCustomEmojiInput] = useState('');
   const [deleteArmedUntil, setDeleteArmedUntil] = useState(0);
   const [deletingAccount, setDeletingAccount] = useState(false);
+
+  // Feedback modal state
+  const [feedbackVisible, setFeedbackVisible] = useState(false);
+  const [feedbackMessage, setFeedbackMessage] = useState('');
+  const [feedbackRating, setFeedbackRating] = useState<number | null>(null);
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
 
   const startEdit = (member: Member) => {
     setEditingId(member.id);
@@ -151,6 +161,22 @@ export default function SettingsScreen() {
         { text: 'Delete Account', style: 'destructive', onPress: runDeleteAccount },
       ],
     );
+  };
+
+  const handleFeedbackSubmit = async () => {
+    if (!feedbackMessage.trim()) return;
+    setFeedbackSubmitting(true);
+    try {
+      await submitFeedback(feedbackMessage.trim(), feedbackRating);
+      setFeedbackVisible(false);
+      setFeedbackMessage('');
+      setFeedbackRating(null);
+      Alert.alert('Thanks!', 'Your feedback has been submitted.');
+    } catch {
+      Alert.alert('Error', 'Failed to submit feedback. Please try again.');
+    } finally {
+      setFeedbackSubmitting(false);
+    }
   };
 
   const totalTickets = tickets.length;
@@ -357,6 +383,14 @@ export default function SettingsScreen() {
             <Ionicons name="sparkles-outline" size={13} color={colors.accent} />
             <Text style={[styles.whatsNewText, { color: colors.accent }]}>What's New</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setFeedbackVisible(true)}
+            activeOpacity={0.7}
+            style={[styles.feedbackBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          >
+            <Ionicons name="chatbubble-outline" size={13} color={colors.textSecondary} />
+            <Text style={[styles.feedbackBtnText, { color: colors.textSecondary }]}>Send Feedback</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Sign Out */}
@@ -384,6 +418,81 @@ export default function SettingsScreen() {
           </Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Feedback Modal */}
+      <Modal
+        visible={feedbackVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setFeedbackVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={[styles.modalContainer, { backgroundColor: colors.background }]}
+        >
+          <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+            <TouchableOpacity onPress={() => setFeedbackVisible(false)} style={styles.modalCloseBtn}>
+              <Ionicons name="close" size={22} color={colors.textSecondary} />
+            </TouchableOpacity>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Send Feedback</Text>
+            <View style={{ width: 36 }} />
+          </View>
+
+          <ScrollView
+            contentContainerStyle={styles.modalContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>YOUR FEEDBACK</Text>
+            <TextInput
+              value={feedbackMessage}
+              onChangeText={setFeedbackMessage}
+              placeholder="Tell us what you think or report an issue..."
+              placeholderTextColor={colors.textTertiary}
+              style={[styles.feedbackInput, { color: colors.text, backgroundColor: colors.inputBackground, borderColor: colors.border }]}
+              multiline
+              numberOfLines={5}
+              maxLength={1000}
+              autoFocus
+            />
+
+            <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>RATING (optional)</Text>
+            <View style={styles.starsRow}>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <TouchableOpacity
+                  key={star}
+                  onPress={() => setFeedbackRating(feedbackRating === star ? null : star)}
+                  activeOpacity={0.7}
+                  style={styles.starBtn}
+                >
+                  <Ionicons
+                    name={feedbackRating !== null && star <= feedbackRating ? 'star' : 'star-outline'}
+                    size={32}
+                    color={feedbackRating !== null && star <= feedbackRating ? '#F59E0B' : colors.border}
+                  />
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <TouchableOpacity
+              onPress={handleFeedbackSubmit}
+              disabled={!feedbackMessage.trim() || feedbackSubmitting}
+              activeOpacity={0.85}
+              style={[
+                styles.submitFeedbackBtn,
+                {
+                  backgroundColor:
+                    feedbackMessage.trim() && !feedbackSubmitting ? colors.accent : colors.border,
+                },
+              ]}
+            >
+              <Text style={styles.submitFeedbackText}>
+                {feedbackSubmitting ? 'Submitting...' : 'Submit Feedback'}
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -611,6 +720,80 @@ const styles = StyleSheet.create({
   whatsNewText: {
     fontSize: 12,
     fontWeight: '600',
+  },
+  feedbackBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  feedbackBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  modalContainer: {
+    flex: 1,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+  },
+  modalCloseBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  modalContent: {
+    padding: 20,
+    gap: 12,
+    paddingBottom: 48,
+  },
+  modalLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    marginTop: 8,
+  },
+  feedbackInput: {
+    fontSize: 15,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 14,
+    minHeight: 120,
+    lineHeight: 22,
+    textAlignVertical: 'top',
+  },
+  starsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingVertical: 4,
+  },
+  starBtn: {
+    padding: 4,
+  },
+  submitFeedbackBtn: {
+    paddingVertical: 16,
+    borderRadius: 14,
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  submitFeedbackText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
   },
   signOutBtn: {
     flexDirection: 'row',
