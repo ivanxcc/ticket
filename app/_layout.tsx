@@ -6,9 +6,11 @@ import { useColorScheme } from 'react-native';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as Notifications from 'expo-notifications';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppStore } from '@/store';
 import { supabase } from '@/lib/supabase';
 import { registerForPushAsync } from '@/lib/pushNotifications';
+import { APP_VERSION } from '@/constants/version';
 
 // Show push alerts/sounds even when the app is in the foreground
 Notifications.setNotificationHandler({
@@ -29,6 +31,7 @@ export default function RootLayout() {
   const { setUserId, initFromSupabase, clearAuth, stopRealtimeSync } = useAppStore();
 
   const [authState, setAuthState] = useState<AuthState>('loading');
+  const [hasCheckedChangelog, setHasCheckedChangelog] = useState(false);
 
   const isDark =
     themeMode === 'system' ? systemScheme === 'dark' : themeMode === 'dark';
@@ -109,6 +112,17 @@ export default function RootLayout() {
     return () => sub.remove();
   }, [authState]);
 
+  // Show changelog on first launch after a version update
+  useEffect(() => {
+    if (authState !== 'ready' || hasCheckedChangelog) return;
+    setHasCheckedChangelog(true);
+    AsyncStorage.getItem('lastSeenVersion').then((seen) => {
+      if (seen !== APP_VERSION) {
+        setTimeout(() => router.push('/changelog' as any), 600);
+      }
+    });
+  }, [authState, hasCheckedChangelog]);
+
   // Register for push notifications and handle tap-to-navigate
   useEffect(() => {
     if (authState !== 'ready') return;
@@ -168,6 +182,14 @@ export default function RootLayout() {
           <Stack.Screen
             name="notifications"
             options={{ headerShown: false, animation: 'slide_from_right' }}
+          />
+          <Stack.Screen
+            name="ticket/edit"
+            options={{ presentation: 'modal', headerShown: false, animation: 'slide_from_bottom' }}
+          />
+          <Stack.Screen
+            name="changelog"
+            options={{ presentation: 'modal', headerShown: false, animation: 'slide_from_bottom' }}
           />
         </Stack>
         <StatusBar style={isDark ? 'light' : 'dark'} />

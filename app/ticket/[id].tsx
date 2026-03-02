@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -5,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/hooks/useTheme';
 import { useAppStore, type Status } from '@/store';
+import { Confetti } from '@/components/Confetti';
 import { StatusBadge } from '@/components/StatusBadge';
 import { CATEGORIES } from '@/constants/categories';
 import { STATUS_COLORS, STATUS_LABELS, STATUS_ICONS, PRIORITY_COLORS, PRIORITY_LABELS } from '@/constants/theme';
@@ -18,6 +20,7 @@ export default function TicketDetailScreen() {
   const { tickets, members, updateTicketStatus, deleteTicket } = useAppStore();
 
   const ticket = tickets.find((t) => t.id === id);
+  const [showConfetti, setShowConfetti] = useState(false);
 
   if (!ticket) {
     return (
@@ -42,6 +45,7 @@ export default function TicketDetailScreen() {
     if (newStatus === ticket.status) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     updateTicketStatus(ticket.id, newStatus);
+    if (newStatus === 'complete') setShowConfetti(true);
   };
 
   const handleDelete = () => {
@@ -73,10 +77,24 @@ export default function TicketDetailScreen() {
         <Text style={[styles.ticketNum, { color: colors.textTertiary }]}>
           {formatTicketNumber(ticket.ticketNumber)}
         </Text>
-        <TouchableOpacity onPress={handleDelete} style={styles.deleteBtn}>
-          <Ionicons name="trash-outline" size={20} color="#EF4444" />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            onPress={() => router.push(`/ticket/edit?id=${ticket.id}` as any)}
+            style={styles.headerBtn}
+          >
+            <Ionicons name="pencil-outline" size={18} color={colors.textSecondary} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleDelete} style={styles.headerBtn}>
+            <Ionicons name="trash-outline" size={18} color="#EF4444" />
+          </TouchableOpacity>
+        </View>
       </View>
+
+      {showConfetti && (
+        <View style={styles.confettiOverlay} pointerEvents="none">
+          <Confetti onFinish={() => setShowConfetti(false)} />
+        </View>
+      )}
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {/* Status stripe accent */}
@@ -233,12 +251,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  deleteBtn: {
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  headerBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  confettiOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 999,
   },
   ticketNum: {
     fontSize: 14,

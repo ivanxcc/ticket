@@ -274,9 +274,11 @@ const styles = StyleSheet.create({
   },
   filtersScroll: {
     flexGrow: 0,
+    flexShrink: 0,
   },
   filtersContainer: {
     paddingHorizontal: 16,
+    paddingTop: 4,
     paddingBottom: 10,
     gap: 8,
     flexDirection: 'row',

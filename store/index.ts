@@ -122,6 +122,7 @@ interface AppStore {
   tickets: Ticket[];
   nextTicketNumber: number;
   addTicket: (data: Omit<Ticket, 'id' | 'ticketNumber' | 'createdAt' | 'updatedAt'>) => void;
+  editTicket: (id: string, updates: Partial<Pick<Ticket, 'title' | 'description' | 'category' | 'priority' | 'assignedTo'>>) => void;
   updateTicketStatus: (id: string, status: Status) => void;
   deleteTicket: (id: string) => void;
 
@@ -254,6 +255,30 @@ export const useAppStore = create<AppStore>()(
                 );
               }
             }
+          });
+      },
+
+      editTicket: (id, updates) => {
+        const now = new Date().toISOString();
+        set((state) => ({
+          tickets: state.tickets.map((t) =>
+            t.id === id ? { ...t, ...updates, updatedAt: now } : t,
+          ),
+        }));
+
+        const dbUpdates: Record<string, unknown> = {};
+        if (updates.title !== undefined) dbUpdates.title = updates.title;
+        if (updates.description !== undefined) dbUpdates.description = updates.description;
+        if (updates.category !== undefined) dbUpdates.category = updates.category;
+        if (updates.priority !== undefined) dbUpdates.priority = updates.priority;
+        if (updates.assignedTo !== undefined) dbUpdates.assigned_to = normalizeUuid(updates.assignedTo);
+
+        supabase
+          .from('tickets')
+          .update(dbUpdates)
+          .eq('id', id)
+          .then(({ error }) => {
+            if (error) console.warn('editTicket sync failed:', error.message);
           });
       },
 

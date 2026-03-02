@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/useTheme';
 import { useAppStore, type ThemeMode, type Member } from '@/store';
 import { supabase } from '@/lib/supabase';
+import { APP_VERSION } from '@/constants/version';
 
 const PRESET_EMOJIS = [
   '🏠','🦁','🐻','🦊','🐺','🦝','🐨','🦄',
@@ -347,6 +348,15 @@ export default function SettingsScreen() {
           <Text style={[styles.aboutSub, { color: colors.textSecondary }]}>
             A simple household ticketing system.
           </Text>
+          <TouchableOpacity
+            onPress={() => router.push('/changelog' as any)}
+            activeOpacity={0.7}
+            style={[styles.versionBtn, { backgroundColor: `${colors.accent}15`, borderColor: `${colors.accent}30` }]}
+          >
+            <Text style={[styles.versionText, { color: colors.accent }]}>v{APP_VERSION}</Text>
+            <Ionicons name="sparkles-outline" size={13} color={colors.accent} />
+            <Text style={[styles.whatsNewText, { color: colors.accent }]}>What's New</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Sign Out */}
@@ -583,6 +593,24 @@ const styles = StyleSheet.create({
   aboutSub: {
     fontSize: 13,
     textAlign: 'center',
+  },
+  versionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginTop: 4,
+  },
+  versionText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  whatsNewText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   signOutBtn: {
     flexDirection: 'row',
