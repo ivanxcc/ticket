@@ -1,22 +1,39 @@
-import { View, Text, TouchableOpacity, FlatList, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, FlatList, StyleSheet, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/hooks/useTheme';
 import { useAppStore, type AppNotification } from '@/store';
 import { formatRelativeTime } from '@/utils/format';
 
 export default function NotificationsScreen() {
   const { colors } = useTheme();
-  const { notifications, markNotificationRead, markAllNotificationsRead } = useAppStore();
+  const { notifications, markNotificationRead, markAllNotificationsRead, clearAllNotifications } = useAppStore();
 
   const openNotification = (notification: AppNotification) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (!notification.isRead) {
       markNotificationRead(notification.id);
     }
     if (notification.ticketId) {
       router.push(`/ticket/${notification.ticketId}`);
     }
+  };
+
+  const handleClearAll = () => {
+    if (notifications.length === 0) return;
+    Alert.alert('Clear Notifications', 'Remove all notifications?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Clear All',
+        style: 'destructive',
+        onPress: () => {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          clearAllNotifications();
+        },
+      },
+    ]);
   };
 
   return (
@@ -26,9 +43,16 @@ export default function NotificationsScreen() {
           <Ionicons name="chevron-back" size={22} color={colors.textSecondary} />
         </TouchableOpacity>
         <Text style={[styles.title, { color: colors.text }]}>Notifications</Text>
-        <TouchableOpacity onPress={markAllNotificationsRead} style={styles.headerBtn}>
-          <Ionicons name="checkmark-done-outline" size={20} color={colors.accent} />
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          {notifications.some((n) => !n.isRead) && (
+            <TouchableOpacity onPress={markAllNotificationsRead} style={styles.headerBtn}>
+              <Ionicons name="checkmark-done-outline" size={20} color={colors.accent} />
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity onPress={handleClearAll} style={styles.headerBtn}>
+            <Ionicons name="trash-outline" size={18} color={notifications.length > 0 ? '#EF4444' : colors.textTertiary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <FlatList
@@ -84,6 +108,10 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   title: {
     fontSize: 20,

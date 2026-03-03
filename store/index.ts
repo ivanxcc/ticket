@@ -139,6 +139,7 @@ interface AppStore {
   fetchNotifications: () => Promise<void>;
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
+  clearAllNotifications: () => Promise<void>;
 
   // Supabase sync
   pendingOps: PendingOp[];
@@ -416,6 +417,17 @@ export const useAppStore = create<AppStore>()(
           .then(({ error }) => {
             if (error) console.warn('markAllNotificationsRead failed:', error.message);
           });
+      },
+
+      clearAllNotifications: async () => {
+        const { userId } = get();
+        if (!userId) return;
+        set({ notifications: [], unreadNotifications: 0 });
+        const { error } = await supabase
+          .from('notifications')
+          .delete()
+          .eq('user_id', userId);
+        if (error) console.warn('clearAllNotifications failed:', error.message);
       },
 
       // Offline queue

@@ -1,6 +1,6 @@
 # Developer Handoff (Ticket App)
 
-Last updated: March 2, 2026 (Phase 2 complete)
+Last updated: March 3, 2026 (Phase 2 + UI polish)
 
 ## Project Snapshot
 - App: React Native + Expo SDK 54 household ticket app
@@ -15,7 +15,10 @@ Last updated: March 2, 2026 (Phase 2 complete)
   - `@react-native-community/datetimepicker` installed + pod install done
 
 ## Latest Commits (newest first)
-- *(Phase 2 — not yet committed)*
+- `1f11234` Increase confetti and switch deadline picker to iOS inline calendar
+- `6cf66f2` Remove aps-environment entitlement for personal team build
+- `600a8b2` Fix multiple_assignees migration: drop trigger+FK before ALTER
+- `43eff76` Add Phase 2 features: multiple assignees, deadlines, history, feedback
 - `ff49d2e` Add Phase 1 features: edit tickets, confetti, changelog, filter fix
 - `0edcdcd` Commit iOS project updates and EAS config
 - `ad6fb73` Update README for current state
@@ -55,6 +58,7 @@ Run these in Supabase SQL Editor if not already applied (in order).
 - `public.notifications` table + RLS + Postgres trigger on `tickets`
 - Trigger fires on: `ticket_assigned`, `ticket_reassigned`, `ticket_status_changed`
 - Notifications screen: `app/notifications.tsx` — bell icon + unread badge in header
+- Added "Clear All" action in notifications header (destructive confirm + store delete)
 - Store fetches, persists, and subscribes to notifications via Realtime
 
 ### Real-time sync
@@ -65,7 +69,8 @@ Run these in Supabase SQL Editor if not already applied (in order).
 ### Ticket card UX
 - Swipe left → delete (with confirmation via alert)
 - Swipe right → removed (was "advance status", conflicted with delete)
-- Footer shows up to 2 assignee emoji + "+N" badge for overflow
+- Footer shows primary assignee emoji + first name + "+N" overflow (e.g., `Ivan +3`)
+- Category row shows deadline short date (e.g., `2/4`) when deadline exists
 - Overdue badge (red) shown when `deadline < now && status !== 'complete'`
 
 ### Edit tickets
@@ -75,7 +80,7 @@ Run these in Supabase SQL Editor if not already applied (in order).
 - Pass ticket ID via URL param: `/ticket/edit?id=${ticket.id}`
 
 ### Confetti on complete
-- `components/Confetti.tsx` — 30 animated particles using react-native-reanimated v4
+- `components/Confetti.tsx` — 70 animated particles using react-native-reanimated v4
 - Each piece: shoots up (700ms, ease-out), falls down (1800ms, ease-in), drifts X, rotates, fades
 - Triggered in `app/ticket/[id].tsx` when status changes to `complete`
 - Wrapped in absolute overlay with `pointerEvents="none"`; auto-hides after 3.2s via `onFinish`
@@ -155,10 +160,14 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=...
 ### Ticket deadline (v1.2.0)
 - `tickets.deadline timestamptz` column
 - `Ticket.deadline: string | null` in store
-- Create/Edit: spinner DateTimePicker (native, via `@react-native-community/datetimepicker`)
+- Create/Edit: iOS inline calendar DateTimePicker (`display="inline"`), default picker on Android
 - pod install done — **Xcode rebuild required**
 - TicketCard: red Overdue badge when `deadline < now && status !== complete`
 - Ticket detail: Deadline metadata row with red overdue pill
+
+### UI polish fixes (post-Phase 2)
+- `Mine` filter fixed for multi-assignee model (`assignedTo.includes(currentMemberId)`)
+- Light haptics added on list filter chip taps and Mine toggle
 
 ### Ticket history (v1.2.0)
 - `ticket_history` table with RLS

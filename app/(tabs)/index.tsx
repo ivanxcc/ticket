@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/hooks/useTheme';
 import { useAppStore, type Status } from '@/store';
 import { TicketCard } from '@/components/TicketCard';
@@ -60,7 +61,7 @@ export default function TicketsScreen() {
       list = list.filter((t) => t.status === activeFilter);
     }
     if (mineOnly) {
-      list = list.filter((t) => t.assignedTo === currentMemberId);
+      list = list.filter((t) => t.assignedTo.includes(currentMemberId));
     }
     return list;
   }, [tickets, activeFilter, mineOnly, currentMemberId]);
@@ -100,7 +101,7 @@ export default function TicketsScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            onPress={() => setMineOnly((v) => !v)}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setMineOnly((v) => !v); }}
             style={[
               styles.mineToggle,
               {
@@ -131,7 +132,7 @@ export default function TicketsScreen() {
           return (
             <TouchableOpacity
               key={f.key}
-              onPress={() => setActiveFilter(f.key)}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setActiveFilter(f.key); }}
               activeOpacity={0.7}
               style={[
                 styles.chip,

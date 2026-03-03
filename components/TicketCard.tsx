@@ -7,7 +7,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { useAppStore, type Ticket } from '@/store';
 import { STATUS_COLORS, STATUS_LABELS, PRIORITY_COLORS, PRIORITY_LABELS } from '@/constants/theme';
 import { CATEGORIES } from '@/constants/categories';
-import { formatRelativeTime, formatTicketNumber } from '@/utils/format';
+import { formatRelativeTime, formatTicketNumber, formatShortDate } from '@/utils/format';
 
 interface Props {
   ticket: Ticket;
@@ -89,7 +89,7 @@ export function TicketCard({ ticket, onPress }: Props) {
             </Text>
           </View>
 
-          {/* Category */}
+          {/* Category + deadline */}
           {category && (
             <View style={styles.categoryRow}>
               <Ionicons
@@ -100,6 +100,15 @@ export function TicketCard({ ticket, onPress }: Props) {
               <Text style={[styles.categoryText, { color: colors.textTertiary }]}>
                 {category.label}
               </Text>
+              {ticket.deadline && (
+                <>
+                  <Text style={[styles.categoryText, { color: colors.textTertiary }]}>·</Text>
+                  <Ionicons name="calendar-outline" size={11} color={isOverdue ? '#EF4444' : colors.textTertiary} />
+                  <Text style={[styles.categoryText, { color: isOverdue ? '#EF4444' : colors.textTertiary }]}>
+                    {formatShortDate(ticket.deadline)}
+                  </Text>
+                </>
+              )}
             </View>
           )}
 
@@ -135,12 +144,13 @@ export function TicketCard({ ticket, onPress }: Props) {
             )}
             {assignees.length > 0 ? (
               <View style={styles.assigneeRow}>
-                {assignees.slice(0, 2).map((a) => (
-                  <Text key={a.id} style={styles.assigneeEmoji}>{a.emoji}</Text>
-                ))}
-                {assignees.length > 2 && (
+                <Text style={styles.assigneeEmoji}>{assignees[0].emoji}</Text>
+                <Text style={[styles.assigneeName, { color: colors.textSecondary }]}>
+                  {assignees[0].name.split(' ')[0]}
+                </Text>
+                {assignees.length > 1 && (
                   <Text style={[styles.assigneeExtra, { color: colors.textTertiary }]}>
-                    +{assignees.length - 2}
+                    +{assignees.length - 1}
                   </Text>
                 )}
               </View>
@@ -244,6 +254,10 @@ const styles = StyleSheet.create({
   },
   assigneeEmoji: {
     fontSize: 13,
+  },
+  assigneeName: {
+    fontSize: 12,
+    fontWeight: '500',
   },
   assigneeExtra: {
     fontSize: 10,

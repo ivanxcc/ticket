@@ -26,3 +26,8 @@ export function formatDate(dateStr: string): string {
     year: 'numeric',
   });
 }
+
+export function formatShortDate(dateStr: string): string {
+  const d = new Date(dateStr);
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+}
