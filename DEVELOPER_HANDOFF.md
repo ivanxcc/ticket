@@ -1,12 +1,12 @@
 # Developer Handoff (Ticket App)
 
-Last updated: March 3, 2026 (Phase 2 + UI polish)
+Last updated: March 3, 2026 (v1.2.1 icon + UI polish)
 
 ## Project Snapshot
 - App: React Native + Expo SDK 54 household ticket app
 - Backend: Supabase Auth + Postgres + RLS + Realtime
 - Current branch: `main`
-- Current version: `1.2.0` (see `constants/version.ts`)
+- Current version: `1.2.1` (see `constants/version.ts`)
 - Recent work focus (Phase 2):
   - Multiple assignees per ticket (`assigned_to uuid[]` in DB)
   - Ticket deadlines with overdue badge on card + detail
@@ -15,6 +15,7 @@ Last updated: March 3, 2026 (Phase 2 + UI polish)
   - `@react-native-community/datetimepicker` installed + pod install done
 
 ## Latest Commits (newest first)
+- `9646f6d` Add new Apple-style app icon assets
 - `1f11234` Increase confetti and switch deadline picker to iOS inline calendar
 - `6cf66f2` Remove aps-environment entitlement for personal team build
 - `600a8b2` Fix multiple_assignees migration: drop trigger+FK before ALTER
