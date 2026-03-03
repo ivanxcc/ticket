@@ -260,7 +260,7 @@ export default function EditTicketScreen() {
               <DateTimePicker
                 value={deadline ?? new Date()}
                 mode="date"
-                display="spinner"
+                display={Platform.OS === 'ios' ? 'inline' : 'default'}
                 minimumDate={new Date()}
                 onChange={(_event, selectedDate) => {
                   if (selectedDate) setDeadline(selectedDate);

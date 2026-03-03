@@ -87,7 +87,7 @@ interface ConfettiProps {
 export function Confetti({ onFinish }: ConfettiProps) {
   const pieces = useMemo<PieceConfig[]>(
     () =>
-      Array.from({ length: 30 }, (_, i) => ({
+      Array.from({ length: 70 }, (_, i) => ({
         id: i,
         startX: Math.random() * SCREEN_WIDTH,
         driftX: (Math.random() - 0.5) * 300,
