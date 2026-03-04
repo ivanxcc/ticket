@@ -5,6 +5,7 @@ export const CHANGELOG: { version: string; date: string; changes: string[] }[] =
     version: '1.2.2',
     date: 'Mar 2026',
     changes: [
+      'Pull down on the ticket list to search',
       'Swipe left on a ticket to edit or delete',
       'Branded splash screen on launch',
       'Overdue and due-today tickets sort to the top',

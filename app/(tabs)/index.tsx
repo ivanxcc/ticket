@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,8 @@ import {
   StyleSheet,
   Platform,
   RefreshControl,
+  TextInput,
+  type FlatList as FlatListType,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -18,6 +20,8 @@ import { useAppStore, type Status } from '@/store';
 import { TicketCard } from '@/components/TicketCard';
 import { EmptyState } from '@/components/EmptyState';
 import { STATUS_COLORS, STATUS_LABELS } from '@/constants/theme';
+
+const SEARCH_HEIGHT = 56;
 
 const FILTERS: { key: Status | 'open'; label: string }[] = [
   { key: 'open', label: 'Open' },
@@ -39,6 +43,10 @@ export default function TicketsScreen() {
   const [activeFilter, setActiveFilter] = useState<Status | 'open'>('open');
   const [mineOnly, setMineOnly] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const listRef = useRef<FlatListType<any>>(null);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -53,6 +61,16 @@ export default function TicketsScreen() {
     }
   }, [filter]);
 
+  // Hide search bar when query is cleared and input is not focused
+  useEffect(() => {
+    if (!searchQuery && !searchFocused) {
+      const timer = setTimeout(() => {
+        listRef.current?.scrollToOffset({ offset: SEARCH_HEIGHT, animated: true });
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [searchQuery, searchFocused]);
+
   const filtered = useMemo(() => {
     let list = tickets;
     if (activeFilter === 'open') {
@@ -62,6 +80,14 @@ export default function TicketsScreen() {
     }
     if (mineOnly) {
       list = list.filter((t) => t.assignedTo.includes(currentMemberId));
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter(
+        (t) =>
+          t.title.toLowerCase().includes(q) ||
+          (t.description && t.description.toLowerCase().includes(q)),
+      );
     }
     const now = new Date();
     const todayStart = new Date(now);
@@ -79,7 +105,7 @@ export default function TicketsScreen() {
     };
 
     return [...list].sort((a, b) => urgency(a) - urgency(b));
-  }, [tickets, activeFilter, mineOnly, currentMemberId]);
+  }, [tickets, activeFilter, mineOnly, currentMemberId, searchQuery]);
 
   const openCount = useMemo(
     () => tickets.filter((t) => t.status !== 'complete').length,
@@ -170,8 +196,35 @@ export default function TicketsScreen() {
 
       {/* List */}
       <FlatList
+        ref={listRef}
         data={filtered}
         keyExtractor={(item) => item.id}
+        contentOffset={{ x: 0, y: SEARCH_HEIGHT }}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        ListHeaderComponent={
+          <View style={[styles.searchContainer, { backgroundColor: colors.background }]}>
+            <View style={[styles.searchBar, { backgroundColor: colors.inputBackground, borderColor: searchQuery ? colors.accent : colors.border }]}>
+              <Ionicons name="search-outline" size={16} color={searchQuery ? colors.accent : colors.textSecondary} />
+              <TextInput
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                onFocus={() => {
+                  setSearchFocused(true);
+                  listRef.current?.scrollToOffset({ offset: 0, animated: true });
+                }}
+                onBlur={() => setSearchFocused(false)}
+                placeholder="Search tickets..."
+                placeholderTextColor={colors.textTertiary}
+                style={[styles.searchInput, { color: colors.text }]}
+                returnKeyType="search"
+                clearButtonMode="while-editing"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+          </View>
+        }
         renderItem={({ item }) => (
           <TicketCard ticket={item} onPress={() => router.push(`/ticket/${item.id}`)} />
         )}
@@ -179,11 +232,19 @@ export default function TicketsScreen() {
         ListEmptyComponent={
           <EmptyState
             icon="ticket-outline"
-            title={activeFilter === 'open' ? 'All caught up!' : `No ${STATUS_LABELS[activeFilter as Status] ?? ''} tickets`}
+            title={
+              searchQuery
+                ? 'No results'
+                : activeFilter === 'open'
+                  ? 'All caught up!'
+                  : `No ${STATUS_LABELS[activeFilter as Status] ?? ''} tickets`
+            }
             subtitle={
-              activeFilter === 'open'
-                ? 'No open tickets — tap + to create one'
-                : 'Nothing here — try a different filter'
+              searchQuery
+                ? `No tickets match "${searchQuery}"`
+                : activeFilter === 'open'
+                  ? 'No open tickets — tap + to create one'
+                  : 'Nothing here — try a different filter'
             }
           />
         }
@@ -320,6 +381,25 @@ const styles = StyleSheet.create({
   listContent: {
     paddingTop: 4,
     paddingBottom: 100,
+  },
+  searchContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 8,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 40,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    padding: 0,
   },
   fab: {
     position: 'absolute',
