@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  type ScrollView as ScrollViewType,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -37,6 +38,13 @@ export default function CreateScreen() {
   const [priority, setPriority] = useState<Priority>('medium');
   const [deadline, setDeadline] = useState<Date | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const scrollRef = useRef<ScrollViewType>(null);
+
+  useEffect(() => {
+    if (showDatePicker) {
+      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+    }
+  }, [showDatePicker]);
 
   const toggleAssignee = (memberId: string) => {
     setAssignedTo((prev) =>
@@ -85,6 +93,7 @@ export default function CreateScreen() {
         </View>
 
         <ScrollView
+          ref={scrollRef}
           contentContainerStyle={styles.form}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
@@ -258,7 +267,7 @@ export default function CreateScreen() {
                 value={deadline ?? new Date()}
                 mode="date"
                 display={Platform.OS === 'ios' ? 'inline' : 'default'}
-                minimumDate={new Date()}
+                minimumDate={new Date(new Date().setHours(0, 0, 0, 0))}
                 onChange={(_event, selectedDate) => {
                   if (selectedDate) setDeadline(selectedDate);
                 }}

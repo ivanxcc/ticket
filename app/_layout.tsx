@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, ActivityIndicator, AppState, type AppStateStatus } from 'react-native';
+import { View, Text, AppState, type AppStateStatus } from 'react-native';
 import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'react-native';
@@ -148,8 +148,6 @@ export default function RootLayout() {
     return () => responseSub.remove();
   }, [authState]);
 
-  const spinnerColor = isDark ? '#F0F0F0' : '#111111';
-
   if (!_hydrated || authState === 'loading') {
     return (
       <View
@@ -160,7 +158,16 @@ export default function RootLayout() {
           backgroundColor: isDark ? '#0C0C0C' : '#F4F4EF',
         }}
       >
-        <ActivityIndicator color={spinnerColor} />
+        <Text
+          style={{
+            fontSize: 40,
+            fontWeight: '800',
+            letterSpacing: -1,
+            color: isDark ? '#F0F0F0' : '#111111',
+          }}
+        >
+          ticket
+        </Text>
       </View>
     );
   }

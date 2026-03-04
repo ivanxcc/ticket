@@ -3,6 +3,7 @@ import { View, Text, Pressable, StyleSheet, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import ReanimatedSwipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import * as Haptics from 'expo-haptics';
+import { router } from 'expo-router';
 import { useTheme } from '@/hooks/useTheme';
 import { useAppStore, type Ticket } from '@/store';
 import { STATUS_COLORS, STATUS_LABELS, PRIORITY_COLORS, PRIORITY_LABELS } from '@/constants/theme';
@@ -23,10 +24,30 @@ export function TicketCard({ ticket, onPress }: Props) {
   const category = CATEGORIES.find((c) => c.id === ticket.category);
   const statusColor = STATUS_COLORS[ticket.status];
   const priorityColor = PRIORITY_COLORS[ticket.priority];
-  const isOverdue =
-    ticket.deadline != null &&
-    ticket.status !== 'complete' &&
-    new Date(ticket.deadline) < new Date();
+  const isOverdue = (() => {
+    if (!ticket.deadline || ticket.status === 'complete') return false;
+    const deadlineEnd = new Date(ticket.deadline);
+    deadlineEnd.setHours(23, 59, 59, 999);
+    return deadlineEnd < new Date();
+  })();
+
+  const isDueToday = (() => {
+    if (!ticket.deadline || ticket.status === 'complete' || isOverdue) return false;
+    const deadline = new Date(ticket.deadline);
+    const today = new Date();
+    return (
+      deadline.getFullYear() === today.getFullYear() &&
+      deadline.getMonth() === today.getMonth() &&
+      deadline.getDate() === today.getDate()
+    );
+  })();
+
+  const handleEdit = () => {
+    swipeableRef.current?.close();
+    setTimeout(() => {
+      router.push(`/ticket/edit?id=${ticket.id}` as any);
+    }, 200);
+  };
 
   const handleDelete = () => {
     swipeableRef.current?.close();
@@ -50,10 +71,16 @@ export function TicketCard({ ticket, onPress }: Props) {
   };
 
   const renderRightActions = () => (
-    <Pressable style={styles.rightAction} onPress={handleDelete}>
-      <Ionicons name="trash-outline" size={22} color="#fff" />
-      <Text style={styles.actionText}>Delete</Text>
-    </Pressable>
+    <View style={styles.rightActions}>
+      <Pressable style={styles.editAction} onPress={handleEdit}>
+        <Ionicons name="pencil-outline" size={20} color="#fff" />
+        <Text style={styles.actionText}>Edit</Text>
+      </Pressable>
+      <Pressable style={styles.deleteAction} onPress={handleDelete}>
+        <Ionicons name="trash-outline" size={20} color="#fff" />
+        <Text style={styles.actionText}>Delete</Text>
+      </Pressable>
+    </View>
   );
 
   return (
@@ -136,10 +163,15 @@ export function TicketCard({ ticket, onPress }: Props) {
 
             <View style={{ flex: 1 }} />
 
-            {/* Assignees + overdue badge */}
+            {/* Urgency badges */}
             {isOverdue && (
               <View style={styles.overdueBadge}>
                 <Text style={styles.overdueText}>Overdue</Text>
+              </View>
+            )}
+            {isDueToday && (
+              <View style={styles.dueTodayBadge}>
+                <Text style={styles.dueTodayText}>Due Today</Text>
               </View>
             )}
             {assignees.length > 0 ? (
@@ -275,13 +307,37 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
   },
+  dueTodayBadge: {
+    backgroundColor: '#F5970020',
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  dueTodayText: {
+    color: '#F59700',
+    fontSize: 10,
+    fontWeight: '700',
+  },
   time: {
     fontSize: 11,
   },
-  rightAction: {
+  rightActions: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingLeft: 8,
+  },
+  editAction: {
     justifyContent: 'center',
     alignItems: 'center',
-    width: 80,
+    width: 68,
+    backgroundColor: '#3B82F6',
+    borderRadius: 14,
+    gap: 4,
+  },
+  deleteAction: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 68,
     backgroundColor: '#EF4444',
     borderRadius: 14,
     gap: 4,

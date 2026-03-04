@@ -1,6 +1,19 @@
-export const APP_VERSION = '1.2.1';
+export const APP_VERSION = '1.2.2';
 
 export const CHANGELOG: { version: string; date: string; changes: string[] }[] = [
+  {
+    version: '1.2.2',
+    date: 'Mar 2026',
+    changes: [
+      'Swipe left on a ticket to edit or delete',
+      'Branded splash screen on launch',
+      'Overdue and due-today tickets sort to the top',
+      '"Due Today" badge on tickets due today',
+      'Deadline calendar now scrolls into view automatically',
+      'Fixed: today was not selectable as a deadline',
+      'Fixed: tickets due today showed as overdue',
+    ],
+  },
   {
     version: '1.2.1',
     date: 'Mar 2026',

@@ -63,7 +63,22 @@ export default function TicketsScreen() {
     if (mineOnly) {
       list = list.filter((t) => t.assignedTo.includes(currentMemberId));
     }
-    return list;
+    const now = new Date();
+    const todayStart = new Date(now);
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(now);
+    todayEnd.setHours(23, 59, 59, 999);
+
+    const urgency = (t: (typeof list)[0]) => {
+      if (!t.deadline || t.status === 'complete') return 2;
+      const d = new Date(t.deadline);
+      const dEnd = new Date(d); dEnd.setHours(23, 59, 59, 999);
+      if (dEnd < now) return 0; // overdue
+      if (d >= todayStart && d <= todayEnd) return 1; // due today
+      return 2;
+    };
+
+    return [...list].sort((a, b) => urgency(a) - urgency(b));
   }, [tickets, activeFilter, mineOnly, currentMemberId]);
 
   const openCount = useMemo(
