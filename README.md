@@ -2,6 +2,12 @@
 
 A household task and maintenance ticketing app built with React Native and Expo. Track repairs, chores, and to-dos across your household — with real-time sync between members.
 
+![IMG_3731](https://github.com/user-attachments/assets/fca83510-34b8-4719-b4a1-4596bf9a6470)
+![IMG_3737](https://github.com/user-attachments/assets/7a117c2d-6f22-44e7-a6fd-9355613c8918)
+![IMG_3739](https://github.com/user-attachments/assets/533c3c3f-dcc2-40fc-866b-27c9a21674c9)
+![IMG_3738](https://github.com/user-attachments/assets/54bfdeef-9965-4bc8-a0e2-a50741bec833)
+![IMG_3735](https://github.com/user-attachments/assets/a3b8a132-27b3-40a9-9220-9cc43e99fc52)
+
 ## Features
 
 - Create tickets with title, description, category, priority, and assignee
