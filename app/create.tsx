@@ -12,7 +12,7 @@ import {
   type ScrollView as ScrollViewType,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -39,6 +39,29 @@ export default function CreateScreen() {
   const [deadline, setDeadline] = useState<Date | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const scrollRef = useRef<ScrollViewType>(null);
+  const navigation = useNavigation();
+
+  const hasChanges = title.trim().length > 0 || description.trim().length > 0;
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      if (!hasChanges) return;
+      e.preventDefault();
+      Alert.alert(
+        'Discard ticket?',
+        'You have unsaved changes. Discard this ticket?',
+        [
+          { text: 'Keep editing', style: 'cancel' },
+          {
+            text: 'Discard',
+            style: 'destructive',
+            onPress: () => navigation.dispatch(e.data.action),
+          },
+        ],
+      );
+    });
+    return unsubscribe;
+  }, [navigation, hasChanges]);
 
   useEffect(() => {
     if (showDatePicker) {
