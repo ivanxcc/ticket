@@ -12,7 +12,7 @@ import {
   type FlatList as FlatListType,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/hooks/useTheme';
@@ -54,12 +54,13 @@ export default function TicketsScreen() {
     setRefreshing(false);
   }, [initFromSupabase]);
 
-  useEffect(() => {
-    if (!filter) return;
-    if (filter === 'open' || filter === 'submitted' || filter === 'in_progress' || filter === 'pending' || filter === 'complete') {
-      setActiveFilter(filter);
-    }
-  }, [filter]);
+  useFocusEffect(
+    useCallback(() => {
+      if (filter === 'open' || filter === 'submitted' || filter === 'in_progress' || filter === 'pending' || filter === 'complete') {
+        setActiveFilter(filter);
+      }
+    }, [filter]),
+  );
 
   // Hide search bar when query is cleared and input is not focused
   useEffect(() => {
