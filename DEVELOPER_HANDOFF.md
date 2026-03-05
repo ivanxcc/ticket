@@ -1,30 +1,30 @@
 # Developer Handoff (Ticket App)
 
-Last updated: March 3, 2026 (v1.2.1 icon + UI polish)
+Last updated: March 4, 2026 (v1.2.3 stats tab, discard guard, filter fix)
 
 ## Project Snapshot
 - App: React Native + Expo SDK 54 household ticket app
 - Backend: Supabase Auth + Postgres + RLS + Realtime
 - Current branch: `main`
-- Current version: `1.2.1` (see `constants/version.ts`)
-- Recent work focus (Phase 2):
-  - Multiple assignees per ticket (`assigned_to uuid[]` in DB)
-  - Ticket deadlines with overdue badge on card + detail
-  - Status history timeline on ticket detail screen
-  - Feedback submission (modal in Settings → `feedback` table in Supabase)
-  - `@react-native-community/datetimepicker` installed + pod install done
+- Current version: `1.2.3` (see `constants/version.ts`)
+- Recent work focus (v1.2.3):
+  - Stats tab: household-level and per-member ticket metrics
+  - Discard confirmation guard on create ticket modal
+  - Fixed filter shortcut from Settings not re-applying on return to Tickets tab
+  - Pull-down search bar on ticket list (v1.2.2)
+  - Swipe-to-edit and swipe-to-delete on ticket cards (v1.2.2)
 
 ## Latest Commits (newest first)
+- `f5c22b0` Fix filter not resetting when navigating from settings to tickets tab
+- `59b7520` Add discard confirmation when closing create ticket modal with unsaved changes
+- `0c19ae5` Add Stats tab with household and per-member metrics
+- `303bc7b` Add pull-down search bar to ticket list
+- `2cc52dc` Bump to v1.2.2: swipe-to-edit, splash screen, overdue sort, deadline fixes
+- `fb8cea3` Bump to v1.2.1 and sync native iOS app icon/version metadata
 - `9646f6d` Add new Apple-style app icon assets
-- `1f11234` Increase confetti and switch deadline picker to iOS inline calendar
-- `6cf66f2` Remove aps-environment entitlement for personal team build
-- `600a8b2` Fix multiple_assignees migration: drop trigger+FK before ALTER
+- `5088c98` Add notification clearing, mine filter fix, and ticket card assignee/deadline polish
 - `43eff76` Add Phase 2 features: multiple assignees, deadlines, history, feedback
 - `ff49d2e` Add Phase 1 features: edit tickets, confetti, changelog, filter fix
-- `0edcdcd` Commit iOS project updates and EAS config
-- `ad6fb73` Update README for current state
-- `70db982` Switch push to Supabase Edge Function + direct APNs (no EAS required)
-- `9ab0603` Fix push notifications: entitlements, UIBackgroundModes, and diagnostics
 - `ea5a60a` Add background push notifications via expo-notifications
 
 ## Important SQL Migrations
@@ -142,6 +142,24 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=...
 - `app/changelog.tsx` — changelog modal
 - `app/notifications.tsx` — in-app notification screen
 - `supabase/rls/*.sql` — all DB schema/policy migrations
+
+## v1.2.3 Changes
+
+### Stats tab (new)
+- `app/(tabs)/stats.tsx` — new tab between Tickets and Settings with `bar-chart-outline` icon
+- Computes all metrics from local Zustand store (no new Supabase queries)
+- Four sections: Overview (completion rate, done/open/total, avg days to complete), Status Breakdown (horizontal bar chart per status), Last 30 Days (created vs completed), Members (per-member assigned/done/rate with colored bars)
+- `avgDays` uses `updatedAt - createdAt` for completed tickets as proxy for resolution time
+
+### Discard confirmation on create
+- `app/create.tsx` — uses `useNavigation().addListener('beforeRemove', ...)` to intercept swipe-to-dismiss and close button
+- Guard only activates when `title` or `description` has content; empty form dismisses immediately
+- Shows alert with "Keep editing" / "Discard" (destructive) options
+
+### Filter shortcut bug fix
+- `app/(tabs)/index.tsx` — replaced `useEffect([filter])` with `useFocusEffect(useCallback(..., [filter]))`
+- `useEffect` only fires when `filter` param changes; if URL already had `?filter=open` and user changed the local filter chip, tapping Settings' Open card again wouldn't re-apply it
+- `useFocusEffect` fires every time the tab gains focus, guaranteeing the URL param is applied regardless of prior state
 
 ## Known Issues / Caveats
 - Push notifications non-functional until paid Apple Developer account + secrets configured

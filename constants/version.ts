@@ -1,6 +1,15 @@
-export const APP_VERSION = '1.2.2';
+export const APP_VERSION = '1.2.3';
 
 export const CHANGELOG: { version: string; date: string; changes: string[] }[] = [
+  {
+    version: '1.2.3',
+    date: 'Mar 2026',
+    changes: [
+      'New Stats tab: completion rate, status breakdown, 30-day activity, per-member metrics',
+      'Discard confirmation when closing a ticket with unsaved changes',
+      'Fixed: filter shortcut from Settings not applying correctly on return',
+    ],
+  },
   {
     version: '1.2.2',
     date: 'Mar 2026',
